@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -9,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const editor = vscode.window.activeTextEditor;
 		return editor.document.getText();
 	}
-	
+
 	function getSelectionCode(): string {
 		if (!vscode.window.activeTextEditor) {
 			return '';
@@ -18,17 +21,33 @@ export function activate(context: vscode.ExtensionContext) {
 		const selection = editor.selection;
 		return editor.document.getText(selection.with({ start: selection.start.with({ character: 0 }), end: selection.end.with({ character: editor.document.lineAt(selection.end.line).text.length }) }));
 	}
-	
+
+	function extractLastMarkdownCodeBlock(markdown: string): string {
+		const codeBlockRegex = /```[\s\S]*?```/g;
+		const codeBlocks = markdown.match(codeBlockRegex);
+		if (codeBlocks && codeBlocks.length > 0) {
+			return codeBlocks[codeBlocks.length - 1];
+		}
+		return '';
+	}
+
+	function removeFirstAndLastLine(text: string): string {
+		const lines = text.split('\n');
+		lines.shift(); // Remove the first line
+		lines.pop(); // Remove the last line
+		return lines.join('\n');
+	}
+
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> => {
 		if (request.slashCommand?.name === 'suggestForEditor') {
 			await suggestRefactorings(request, token, progress, getFullCode);
-			return { };
+			return {};
 		} else if (request.slashCommand?.name === 'suggestForSelection') {
 			await suggestRefactorings(request, token, progress, getSelectionCode);
-			return { };
+			return {};
 		} else {
 			await suggestRefactorings(request, token, progress, getFullCode);
-			return { };
+			return {};
 		}
 	};
 
@@ -51,17 +70,18 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		const access = await vscode.chat.requestChatAccess('copilot');
-		
+
 		let code = getCode();
 
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
-				content: `You are in how to use refactorings to improve the quality of code.\n` +
+				content: `You are a world class expert in how to use refactorings to improve the quality of code.\n` +
 					`Make suggestions for restructuring existing code, altering its internal structure without changing its external behavior.` +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
-					`Refactor in small steps and explain each refactoring step.\n` +
+					`Always refactor in small steps.\n` +
+					`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
 					`Be aware that you only have access to a subset of the project\n` +
 					`Additional Rules\n` +
 					`Think step by step:\n` +
@@ -78,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 			{
 				role: vscode.ChatMessageRole.User,
-				content: 
+				content:
 					`${request.prompt}\n` +
 					`Suggest refactorings for the following code:\n.` +
 					`${code}`
@@ -86,8 +106,24 @@ export function activate(context: vscode.ExtensionContext) {
 		];
 
 		const chatRequest = access.makeRequest(messages, {}, token);
+		let answer = '';
 		for await (const fragment of chatRequest.response) {
+			answer += fragment;
 			progress.report({ content: fragment });
+		}
+
+		const codeBlock = extractLastMarkdownCodeBlock(answer);
+		if (codeBlock.length) {
+			const refactoredCode = removeFirstAndLastLine(codeBlock);
+			let originalFile = path.join(os.tmpdir(), 'original.ts');
+			let refactoredFile = path.join(os.tmpdir(), 'refactored.ts');
+			fs.writeFileSync(originalFile, code);
+			fs.writeFileSync(refactoredFile, refactoredCode);
+			let originalUri = vscode.Uri.file(originalFile);
+			let refactoredUri = vscode.Uri.file(refactoredFile);
+			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri, 'Suggested Refactorings');
+		} else {
+			vscode.window.showInformationMessage(`The refactoring agent answer does not contain the refactored code in the correct format. Please try again.`);
 		}
 	}
 }
