@@ -222,8 +222,8 @@ export function activate(context: vscode.ExtensionContext) {
 			const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 			if (codeBlock.length) {
 				const refactoredCode = removeFirstAndLastLine(codeBlock);
-				let originalFile = path.join(os.tmpdir(), `original.${getFileExtension()}`);
-				let refactoredFile = path.join(os.tmpdir(), `refactored.${getFileExtension()}`);
+				let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`);
+				let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
 				fs.writeFileSync(originalFile, arg.originalCode);
 				fs.writeFileSync(refactoredFile, refactoredCode);
 				let originalUri = vscode.Uri.file(originalFile);
