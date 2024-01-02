@@ -70,10 +70,10 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
-		if (request.slashCommand?.name === 'suggestForEditor') {
+		if (request.slashCommand?.name === 'refactorEditor') {
 			const refactoringResult = await suggestRefactorings(request, token, progress, getFullCode);
 			return refactoringResult;
-		} else if (request.slashCommand?.name === 'suggestForSelection') {
+		} else if (request.slashCommand?.name === 'refactorSelection') {
 			const refactoringResult = await suggestRefactorings(request, token, progress, getSelectionCode);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === 'suggestExtractMethod') {
