@@ -13,14 +13,14 @@ const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
 const SLASH_COMMAND_SMELLS = 'smells';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 
-const FORMAT_RESTRICTIONS = 
+const FORMAT_RESTRICTIONS =
 	`Restrict the format used in your answers follows:\n` +
 	`1. Use Markdown formatting in your answers.\n` +
 	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
 	`3. Avoid wrapping the whole response in triple backticks.\n` +
 	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
 
-const BASIC_SYSTEM_MESSAGE = 
+const BASIC_SYSTEM_MESSAGE =
 	`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
 	`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
 	`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
@@ -92,25 +92,25 @@ export function activate(context: vscode.ExtensionContext) {
 		const filePath = editor.document.uri.fsPath;
 		const extension = path.extname(filePath);
 		return extension;
-	}	
+	}
 
 	function removeFirstAndLastLine(text: string): string {
 		const lines = text.split('\n');
-		lines.shift(); 
-		lines.pop(); 
+		lines.shift();
+		lines.pop();
 		return lines.join('\n');
 	}
 
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
 		if (!vscode.window.activeTextEditor) {
-			progress.report({ content: `There is no active editor, open an editor and try again.`});
+			progress.report({ content: `There is no active editor, open an editor and try again.` });
 			return NO_REFACTORING_RESULT;
 		}
-		if(vscode.window.activeTextEditor.selection.isEmpty) {
+		if (vscode.window.activeTextEditor.selection.isEmpty) {
 			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
 			return NO_REFACTORING_RESULT;
 		}
-		
+
 		if (request.slashCommand?.name === SLASH_COMMAND_DUPLICATION) {
 			const refactoringResult = await suggestRefactoringsDuplication(request, token, progress, getSelectionCode);
 			return refactoringResult;
@@ -175,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
-				content: 
+				content:
 					BASIC_SYSTEM_MESSAGE +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
@@ -187,7 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`4. Make the code more efficient if possible.\n` +
 					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage()}\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -228,7 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`Additional Rule\n` +
 					`1. Suggest refactorings that eliminate code duplication.\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -269,7 +269,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`Additional Rule\n` +
 					`1. Suggest refactorings that eliminate code smells.\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -309,7 +309,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`Additional Rule\n` +
 					`1. Suggest refactorings that make the code more performant.\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -350,7 +350,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`1. Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
 					`The language used in the code is ${getLanguage()}\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -392,7 +392,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`2. Suggest rename refactorings of variable names when it improves the readability.\n` +
 					`The language used in the code is ${getLanguage()}\n` +
 					FORMAT_RESTRICTIONS
-				},
+			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
@@ -437,7 +437,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
-				content: 
+				content:
 					`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
 					`Make suggestions for restructuring existing code, altering its internal structure without changing its external behavior.` +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
@@ -474,7 +474,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		agent,
-		vscode.commands.registerCommand(PREVIEW_REFACTORING, async (arg:IRefactoringResult) => {
+		vscode.commands.registerCommand(PREVIEW_REFACTORING, async (arg: IRefactoringResult) => {
 			const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 			if (codeBlock.length) {
 				const refactoredCode = removeFirstAndLastLine(codeBlock);
@@ -510,13 +510,13 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			let decodedString = decodeURIComponent(annotationString!);
-			let annotation:IRefactoringTarget = JSON.parse(decodedString!);
+			let annotation: IRefactoringTarget = JSON.parse(decodedString!);
 			let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
 			let replacement = activeTextEditor.document.getText();
 			await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-			
+
 			let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
-    		let editor = await vscode.window.showTextDocument(doc);
+			let editor = await vscode.window.showTextDocument(doc);
 			if (editor.document.version !== annotation.documentVersion) {
 				vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
 				return;
