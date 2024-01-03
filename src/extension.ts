@@ -281,16 +281,16 @@ export function activate(context: vscode.ExtensionContext) {
 			let decodedString = decodeURIComponent(annotationString!);
 			let annotation:IRefactoringTarget = JSON.parse(decodedString!);
 			let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
-			let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
 			let replacement = activeTextEditor.document.getText();
 			await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-
+			
 			let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
     		let editor = await vscode.window.showTextDocument(doc);
 			if (editor.document.version !== annotation.documentVersion) {
 				vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
 				return;
 			}
+			let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
 			let success = await editor.edit(editBuilder => {
 				editBuilder.replace(targetSelection, replacement!);
 			});
