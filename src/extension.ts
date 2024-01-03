@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 
 const PREVIEW_REFACTORING = 'refactoring.preview';
@@ -49,6 +47,27 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 	suggestedRefactoring: '',
 	refactoringTarget: ''
 };
+
+class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
+	private originalContent: string = '';
+	private refactoredContent: string = '';
+	private fileExtension: string = '';
+
+	updateContent(original: string, refactored: string, fileExtension: string) {
+		this.originalContent = original;
+		this.refactoredContent = refactored;
+		this.fileExtension = fileExtension;
+	}
+
+	provideTextDocumentContent(uri: vscode.Uri): string {
+		if (uri.path === `original${this.fileExtension}`) {
+			return this.originalContent;
+		} else if (uri.path === `refactored${this.fileExtension}`) {
+			return this.refactoredContent;
+		}
+		return '';
+	}
+}
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -506,27 +525,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	}
 
-	class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
-		private originalContent: string = '';
-		private refactoredContent: string = '';
-		private fileExtension: string = '';
-	
-		updateContent(original: string, refactored: string, fileExtension: string) {
-			this.originalContent = original;
-			this.refactoredContent = refactored;
-			this.fileExtension = fileExtension;
-		}
-	
-		provideTextDocumentContent(uri: vscode.Uri): string {
-			if (uri.path === `original${this.fileExtension}`) {
-				return this.originalContent;
-			} else if (uri.path === `refactored${this.fileExtension}`) {
-				return this.refactoredContent;
-			}
-			return '';
-		}
-	}
-
 	async function showPreview(arg: IRefactoringResult) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 		if (codeBlock.length) {
@@ -537,10 +535,15 @@ export function activate(context: vscode.ExtensionContext) {
 			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
 	
 			let previewContentProvider = new RefactoringPreviewContentProvider();
-			vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider);
+			context.subscriptions.push(
+				vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
+			);
 			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
 	
 			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri);
+
+			// annotate the URI with a query parameter that contains the refactoring target
+			// so that the refactoring can be applied later
 			let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
 			let annotatedURI = refactoredUri.with({ query: query });
 
