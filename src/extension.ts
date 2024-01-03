@@ -14,12 +14,6 @@ const SLASH_COMMAND_SMELLS = 'smells';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 
 // prompts
-const FORMAT_RESTRICTIONS =
-	`Restrict the format used in your answers follows:\n` +
-	`1. Use Markdown formatting in your answers.\n` +
-	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
-	`3. Avoid wrapping the whole response in triple backticks.\n` +
-	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
 
 const BASIC_SYSTEM_MESSAGE =
 	`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
@@ -28,7 +22,14 @@ const BASIC_SYSTEM_MESSAGE =
 	`Always refactor in small steps.\n` +
 	`Be aware that you only have access to a subset of the project\n`;
 
-interface IRefactoringResult extends vscode.ChatAgentResult2 {
+const FORMAT_RESTRICTIONS =
+	`Restrict the format used in your answers follows:\n` +
+	`1. Use Markdown formatting in your answers.\n` +
+	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
+	`3. Avoid wrapping the whole response in triple backticks.\n` +
+	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
+
+	interface IRefactoringResult extends vscode.ChatAgentResult2 {
 	originalCode: string;
 	suggestedRefactoring: string;
 	refactoringTarget: string;
@@ -51,11 +52,7 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 
 export function activate(context: vscode.ExtensionContext) {
 
-	function getSelectionCode(): string {
-		if (!vscode.window.activeTextEditor) {
-			return '';
-		}
-		const editor = vscode.window.activeTextEditor;
+	function getSelectionCode(editor: vscode.TextEditor): string {
 		const selection = editor.selection;
 		return editor.document.getText(selection.with({ start: selection.start.with({ character: 0 }), end: selection.end.with({ character: editor.document.lineAt(selection.end.line).text.length }) }));
 	}
@@ -105,26 +102,26 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		if (request.slashCommand?.name === SLASH_COMMAND_DUPLICATION) {
-			const refactoringResult = await suggestRefactoringsDuplication(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactoringsDuplication(request, token, progress);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === SLASH_COMMAND_SMELLS) {
-			const refactoringResult = await suggestRefactoringsSmells(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactoringsSmells(request, token, progress);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === SLASH_COMMAND_PERFORMANCE) {
-			const refactoringResult = await suggestRefactoringsPerformance(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactoringsPerformance(request, token, progress);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === SLASH_COMMAND_IDIOMATIC) {
-			const refactoringResult = await suggestRefactoringsIdiomatic(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactoringsIdiomatic(request, token, progress);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === SLASH_COMMAND_UNDERSTANDABILITY) {
-			const refactoringResult = await suggestRefactoringsUnderstandability(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactoringsUnderstandability(request, token, progress);
 			return refactoringResult;
 		} else if (request.slashCommand?.name === SLASH_COMMAND_SUGGEST_EXTRACT_METHOD) {
-			const refactoringResult = await suggestExtractMethod(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestExtractMethod(request, token, progress);
 			return refactoringResult;
 		}
 		else {
-			const refactoringResult = await suggestRefactorings(request, token, progress, getSelectionCode);
+			const refactoringResult = await suggestRefactorings(request, token, progress);
 			return refactoringResult;
 		}
 	};
@@ -159,11 +156,11 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -204,12 +201,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -245,12 +242,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -286,12 +283,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -326,12 +323,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -367,12 +364,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
@@ -421,11 +418,12 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestExtractMethod(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+	async function suggestExtractMethod(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getCode();
+		let code = getSelectionCode(editor);
 
 		const messages = [
 			{
