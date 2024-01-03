@@ -29,7 +29,7 @@ const FORMAT_RESTRICTIONS =
 	`3. Avoid wrapping the whole response in triple backticks.\n` +
 	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
 
-	interface IRefactoringResult extends vscode.ChatAgentResult2 {
+interface IRefactoringResult extends vscode.ChatAgentResult2 {
 	originalCode: string;
 	suggestedRefactoring: string;
 	refactoringTarget: string;
@@ -506,19 +506,41 @@ export function activate(context: vscode.ExtensionContext) {
 
 	}
 
+	class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
+		private originalContent: string = '';
+		private refactoredContent: string = '';
+		private fileExtension: string = '';
+	
+		updateContent(original: string, refactored: string, fileExtension: string) {
+			this.originalContent = original;
+			this.refactoredContent = refactored;
+			this.fileExtension = fileExtension;
+		}
+	
+		provideTextDocumentContent(uri: vscode.Uri): string {
+			if (uri.path === `original${this.fileExtension}`) {
+				return this.originalContent;
+			} else if (uri.path === `refactored${this.fileExtension}`) {
+				return this.refactoredContent;
+			}
+			return '';
+		}
+	}
+
 	async function showPreview(arg: IRefactoringResult) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 		if (codeBlock.length) {
 			const refactoredCode = removeFirstAndLastLine(codeBlock);
-			let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`); // TODO: using getFileExtension() is not robust enough, should use the language from the codeblock
-			let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
+			const fileExtension = getFileExtension();
 
-			fs.writeFileSync(originalFile, arg.originalCode);
-			fs.writeFileSync(refactoredFile, refactoredCode);
-
-			let originalUri = vscode.Uri.file(originalFile);
-			let refactoredUri = vscode.Uri.file(refactoredFile);
-
+			const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
+			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
+	
+			let previewContentProvider = new RefactoringPreviewContentProvider();
+			vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider);
+			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
+	
+			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri);
 			let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
 			let annotatedURI = refactoredUri.with({ query: query });
 

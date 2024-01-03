@@ -36,7 +36,7 @@
                 {
                     "command": "refactoring-agent.apply-refactoring",
                     "group": "navigation",
-                    "when": "isInDiffEditor"
+                    "when": "resourceScheme == 'refactoring-preview'"
                 }
             ]
         }
