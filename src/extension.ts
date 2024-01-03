@@ -249,22 +249,27 @@ export function activate(context: vscode.ExtensionContext) {
 				const refactoredCode = removeFirstAndLastLine(codeBlock);
 				let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`);
 				let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
+
 				fs.writeFileSync(originalFile, arg.originalCode);
 				fs.writeFileSync(refactoredFile, refactoredCode);
+
 				let originalUri = vscode.Uri.file(originalFile);
 				let refactoredUri = vscode.Uri.file(refactoredFile);
+
 				let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
 				let annotatedURI = refactoredUri.with({ query: query });
+
 				await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
 			}
 		}),
 
 		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', async () => {
-			if (!vscode.window.activeTextEditor) {
+			const activeTextEditor = vscode.window.activeTextEditor;
+			if (!activeTextEditor) {
 				vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
 				return;
 			}
-			let uri = vscode.window.activeTextEditor.document.uri;
+			let uri = activeTextEditor.document.uri;
 			let query = uri.query;
 			let params = new URLSearchParams(query);
 			let annotationString = params.get('refactoringTarget');
@@ -277,7 +282,8 @@ export function activate(context: vscode.ExtensionContext) {
 			let annotation:IRefactoringTarget = JSON.parse(decodedString!);
 			let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
 			let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
-			let replacement = vscode.window.activeTextEditor.document.getText();
+			let replacement = activeTextEditor.document.getText();
+			await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
 
 			let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
     		let editor = await vscode.window.showTextDocument(doc);
