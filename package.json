@@ -27,9 +27,19 @@
             {
                 "command": "refactoring-agent.apply-refactoring",
                 "title": "Apply Refactoring",
-                "category": "Refactoring Agent"
+                "category": "Refactoring Agent",
+                "icon": "$(check)"
             }
-        ]
+        ],
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "refactoring-agent.apply-refactoring",
+                    "group": "navigation",
+                    "when": "isInDiffEditor"
+                }
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",

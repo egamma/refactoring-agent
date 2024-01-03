@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { decode } from 'punycode';
 
 const PREVIEW_REFACTORING = 'refactoring.preview';
 
@@ -75,8 +74,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	function removeFirstAndLastLine(text: string): string {
 		const lines = text.split('\n');
-		lines.shift(); // Remove the first line
-		lines.pop(); // Remove the last line
+		lines.shift(); 
+		lines.pop(); 
 		return lines.join('\n');
 	}
 
@@ -247,7 +246,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 			if (codeBlock.length) {
 				const refactoredCode = removeFirstAndLastLine(codeBlock);
-				let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`);
+				let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`); // TODO: using getFileExtension() is not robust enough, should use the language from the codeblock
 				let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
 
 				fs.writeFileSync(originalFile, arg.originalCode);
