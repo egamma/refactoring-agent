@@ -5,6 +5,28 @@ import * as path from 'path';
 
 const PREVIEW_REFACTORING = 'refactoring.preview';
 
+// slash commands
+const SLASH_COMMAND_DUPLICATION = 'duplication';
+const SLASH_COMMAND_PERFORMANCE = 'performance';
+const SLASH_COMMAND_UNDERSTANDABILITY = 'understandability';
+const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
+const SLASH_COMMAND_SMELLS = 'smells';
+const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
+
+const FORMAT_RESTRICTIONS = 
+	`Restrict the format used in your answers follows:\n` +
+	`1. Use Markdown formatting in your answers.\n` +
+	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
+	`3. Avoid wrapping the whole response in triple backticks.\n` +
+	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
+
+const BASIC_SYSTEM_MESSAGE = 
+	`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
+	`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
+	`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
+	`Always refactor in small steps.\n` +
+	`Be aware that you only have access to a subset of the project\n`;
+
 interface IRefactoringResult extends vscode.ChatAgentResult2 {
 	originalCode: string;
 	suggestedRefactoring: string;
@@ -80,18 +102,36 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
-		if (request.slashCommand?.name === 'refactorEditor') {
-			const refactoringResult = await suggestRefactorings(request, token, progress, getFullCode);
+		if (!vscode.window.activeTextEditor) {
+			progress.report({ content: `There is no active editor, open an editor and try again.`});
+			return NO_REFACTORING_RESULT;
+		}
+		if(vscode.window.activeTextEditor.selection.isEmpty) {
+			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
+			return NO_REFACTORING_RESULT;
+		}
+		
+		if (request.slashCommand?.name === SLASH_COMMAND_DUPLICATION) {
+			const refactoringResult = await suggestRefactoringsDuplication(request, token, progress, getSelectionCode);
 			return refactoringResult;
-		} else if (request.slashCommand?.name === 'refactorSelection') {
-			const refactoringResult = await suggestRefactorings(request, token, progress, getSelectionCode);
+		} else if (request.slashCommand?.name === SLASH_COMMAND_SMELLS) {
+			const refactoringResult = await suggestRefactoringsSmells(request, token, progress, getSelectionCode);
 			return refactoringResult;
-		} else if (request.slashCommand?.name === 'suggestExtractMethod') {
-			const refactoringResult = await suggestExtractMethod(request, token, progress, getFullCode);
+		} else if (request.slashCommand?.name === SLASH_COMMAND_PERFORMANCE) {
+			const refactoringResult = await suggestRefactoringsPerformance(request, token, progress, getSelectionCode);
+			return refactoringResult;
+		} else if (request.slashCommand?.name === SLASH_COMMAND_IDIOMATIC) {
+			const refactoringResult = await suggestRefactoringsIdiomatic(request, token, progress, getSelectionCode);
+			return refactoringResult;
+		} else if (request.slashCommand?.name === SLASH_COMMAND_UNDERSTANDABILITY) {
+			const refactoringResult = await suggestRefactoringsUnderstandability(request, token, progress, getSelectionCode);
+			return refactoringResult;
+		} else if (request.slashCommand?.name === SLASH_COMMAND_SUGGEST_EXTRACT_METHOD) {
+			const refactoringResult = await suggestExtractMethod(request, token, progress, getSelectionCode);
 			return refactoringResult;
 		}
 		else {
-			const refactoringResult = await suggestRefactorings(request, token, progress, getFullCode);
+			const refactoringResult = await suggestRefactorings(request, token, progress, getSelectionCode);
 			return refactoringResult;
 		}
 	};
@@ -103,12 +143,16 @@ export function activate(context: vscode.ExtensionContext) {
 	agent.slashCommandProvider = {
 		provideSlashCommands(token) {
 			return [
-				{ name: 'refactorEditor', description: 'Suggest refacorings for the active editor' },
-				{ name: 'refactorSelection', description: 'Suggest refactorings for the current selection' },
-				{ name: 'suggestExtractMethod', description: 'Suggest extract method refactorings for the active editor' },
+				{ name: SLASH_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
+				{ name: SLASH_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
+				{ name: SLASH_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
+				{ name: SLASH_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
+				{ name: SLASH_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
+				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' }
 			];
 		}
 	};
+
 	agent.followupProvider = {
 		provideFollowups(result: IRefactoringResult, token: vscode.CancellationToken) {
 			if (result.suggestedRefactoring.length > 0) {
@@ -123,10 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
-		if (!vscode.window.activeTextEditor) {
-			vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
-			return NO_REFACTORING_RESULT;
-		}
+		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
 
 		let code = getCode();
@@ -135,25 +176,17 @@ export function activate(context: vscode.ExtensionContext) {
 			{
 				role: vscode.ChatMessageRole.System,
 				content: 
-					`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
-					`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
+					BASIC_SYSTEM_MESSAGE +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
-					`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
-					`Be aware that you only have access to a subset of the project\n` +
 					`Think step by step:\n` +
-					`Always refactor in small steps.\n` +
 					`Additional Rules\n` +
 					`1. Suggest refactorings that eliminate code duplication.\n` +
 					`2. Suggest refactorings that make the code easier to understand and maintain.\n` +
-					`3. Suggest rename refactorings of local variable names when it improves the readability.\n` +
+					`3. Suggest rename refactorings of variable names when it improves the readability.\n` +
 					`4. Make the code more efficient if possible.\n` +
 					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage()}\n` +
-					`Restrict the format used in your answers follows:\n` +
-					`1. Use Markdown formatting in your answers.\n` +
-					`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
-					`3. Avoid wrapping the whole response in triple backticks.\n` +
-					`4. In the Markdown code blocks use the same indentation as in the original code.\n`
+					FORMAT_RESTRICTIONS
 				},
 			{
 				role: vscode.ChatMessageRole.User,
@@ -164,11 +197,6 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		if(vscode.window.activeTextEditor.selection.isEmpty) {
-			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
-			return NO_REFACTORING_RESULT;
-		}
-		
 		const chatRequest = access.makeRequest(messages, {}, token);
 		let suggestedRefactoring = '';
 		for await (const fragment of chatRequest.response) {
@@ -179,7 +207,212 @@ export function activate(context: vscode.ExtensionContext) {
 		return {
 			suggestedRefactoring: suggestedRefactoring,
 			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(vscode.window.activeTextEditor))
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
+	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getCode();
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that eliminate code duplication.\n` +
+					FORMAT_RESTRICTIONS
+				},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that reduce code duplication:\n.` +
+					`${code}`
+			},
+		];
+
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
+	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getCode();
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that eliminate code smells.\n` +
+					FORMAT_RESTRICTIONS
+				},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that reduce code smells:\n.` +
+					`${code}`
+			},
+		];
+
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
+	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getCode();
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that make the code more performant.\n` +
+					FORMAT_RESTRICTIONS
+				},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that improve the performance:\n.` +
+					`${code}`
+			},
+		];
+
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
+	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getCode();
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
+					`The language used in the code is ${getLanguage()}\n` +
+					FORMAT_RESTRICTIONS
+				},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that make the code follow the language's idioms and naming patterns:\n.` +
+					`${code}`
+			},
+		];
+
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
+	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getCode();
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that make the code easier to understand and maintain.\n` +
+					`2. Suggest rename refactorings of variable names when it improves the readability.\n` +
+					`The language used in the code is ${getLanguage()}\n` +
+					FORMAT_RESTRICTIONS
+				},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that make the code easier to understand:\n.` +
+					`${code}`
+			},
+		];
+
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
 		};
 	}
 
@@ -196,10 +429,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function suggestExtractMethod(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, getCode: () => string): Promise<IRefactoringResult> {
-		if (!vscode.window.activeTextEditor) {
-			vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
-			return NO_REFACTORING_RESULT;
-		}
+
 		const access = await vscode.chat.requestChatAccess('copilot');
 
 		let code = getCode();
@@ -207,7 +437,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
-				content: `You are a world class expert in how to use refactorings to improve the quality of code.\n` +
+				content: 
+					`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
 					`Make suggestions for restructuring existing code, altering its internal structure without changing its external behavior.` +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 					`Explain the extract method suggestion in detail and explain why it improve the code.\n` +
@@ -217,11 +448,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`This means to extract the code from line 1, column 1 to line 2, column 1.\n` +
 					`Additional Rules\n` +
 					`Think step by step:\n` +
-					`Restrict the format used in your answers follows:` +
-					`1. Use Markdown formatting in your answers.\n` +
-					`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
-					`3. Avoid wrapping the whole response in triple backticks.\n` +
-					`4. In the Markdown code blocks use the same indentation as in the original code.\n`
+					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
