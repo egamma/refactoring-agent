@@ -474,62 +474,66 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		agent,
-		vscode.commands.registerCommand(PREVIEW_REFACTORING, async (arg: IRefactoringResult) => {
-			const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
-			if (codeBlock.length) {
-				const refactoredCode = removeFirstAndLastLine(codeBlock);
-				let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`); // TODO: using getFileExtension() is not robust enough, should use the language from the codeblock
-				let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
-
-				fs.writeFileSync(originalFile, arg.originalCode);
-				fs.writeFileSync(refactoredFile, refactoredCode);
-
-				let originalUri = vscode.Uri.file(originalFile);
-				let refactoredUri = vscode.Uri.file(refactoredFile);
-
-				let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
-				let annotatedURI = refactoredUri.with({ query: query });
-
-				await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
-			}
-		}),
-
-		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', async () => {
-			const activeTextEditor = vscode.window.activeTextEditor;
-			if (!activeTextEditor) {
-				vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
-				return;
-			}
-			let uri = activeTextEditor.document.uri;
-			let query = uri.query;
-			let params = new URLSearchParams(query);
-			let annotationString = params.get('refactoringTarget');
-			if (!annotationString) {
-				vscode.window.showInformationMessage(`The currently active editor does not suggest a refactoring to apply.`);
-				return;
-			}
-
-			let decodedString = decodeURIComponent(annotationString!);
-			let annotation: IRefactoringTarget = JSON.parse(decodedString!);
-			let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
-			let replacement = activeTextEditor.document.getText();
-			await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-
-			let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
-			let editor = await vscode.window.showTextDocument(doc);
-			if (editor.document.version !== annotation.documentVersion) {
-				vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
-				return;
-			}
-			let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
-			let success = await editor.edit(editBuilder => {
-				editBuilder.replace(targetSelection, replacement!);
-			});
-			if (!success) {
-				vscode.window.showInformationMessage(`Failed to apply the suggested refactoring.`);
-			}
-		}),
+		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
+		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', applyRefactoring),
 	);
+
+	async function applyRefactoring() {
+		const activeTextEditor = vscode.window.activeTextEditor;
+		if (!activeTextEditor) {
+			vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
+			return;
+		}
+		let uri = activeTextEditor.document.uri;
+		let query = uri.query;
+		let params = new URLSearchParams(query);
+		let annotationString = params.get('refactoringTarget');
+		if (!annotationString) {
+			vscode.window.showInformationMessage(`The currently active editor does not suggest a refactoring to apply.`);
+			return;
+		}
+
+		let decodedString = decodeURIComponent(annotationString!);
+		let annotation: IRefactoringTarget = JSON.parse(decodedString!);
+		let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
+		let replacement = activeTextEditor.document.getText();
+		await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+		let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
+		let editor = await vscode.window.showTextDocument(doc);
+		if (editor.document.version !== annotation.documentVersion) {
+			vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
+			return;
+		}
+		let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
+		let success = await editor.edit(editBuilder => {
+			editBuilder.replace(targetSelection, replacement!);
+		});
+		if (!success) {
+			vscode.window.showInformationMessage(`Failed to apply the suggested refactoring.`);
+		}
+
+	}
+
+	async function showPreview(arg: IRefactoringResult) {
+		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
+		if (codeBlock.length) {
+			const refactoredCode = removeFirstAndLastLine(codeBlock);
+			let originalFile = path.join(os.tmpdir(), `original${getFileExtension()}`); // TODO: using getFileExtension() is not robust enough, should use the language from the codeblock
+			let refactoredFile = path.join(os.tmpdir(), `refactored${getFileExtension()}`);
+
+			fs.writeFileSync(originalFile, arg.originalCode);
+			fs.writeFileSync(refactoredFile, refactoredCode);
+
+			let originalUri = vscode.Uri.file(originalFile);
+			let refactoredUri = vscode.Uri.file(refactoredFile);
+
+			let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
+			let annotatedURI = refactoredUri.with({ query: query });
+
+			await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
+		}
+	};
 }
 
 export function deactivate() { }
