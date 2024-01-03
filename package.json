@@ -22,6 +22,15 @@
         "chatRequestAccess"
     ],
     "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "refactoring-agent.apply-refactoring",
+                "title": "Apply Refactoring",
+                "category": "Refactoring Agent"
+            }
+        ]
+    },
     "scripts": {
         "vscode:prepublish": "npm run compile",
         "compile": "tsc -p ./",

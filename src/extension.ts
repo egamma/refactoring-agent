@@ -2,19 +2,30 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { decode } from 'punycode';
 
 const PREVIEW_REFACTORING = 'refactoring.preview';
 
 interface IRefactoringResult extends vscode.ChatAgentResult2 {
 	originalCode: string;
 	suggestedRefactoring: string;
+	refactoringTarget: string;
+}
+
+interface IRefactoringTarget {
+	documentPath: string;
+	documentVersion: number;
+	selectionStartLine: number;
+	selectionStartCharacter: number;
+	selectionEndLine: number;
+	selectionEndCharacter: number;
 }
 
 const NO_REFACTORING_RESULT: IRefactoringResult = {
 	originalCode: '',
-	suggestedRefactoring: ''
+	suggestedRefactoring: '',
+	refactoringTarget: ''
 };
-
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -124,22 +135,22 @@ export function activate(context: vscode.ExtensionContext) {
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
-				content: `You are a world class expert in how to use refactorings to improve the quality of code.\n` +
-					`Make suggestions for restructuring existing code, altering its internal structure without changing its external behavior.` +
+				content: 
+					`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
+					`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
 					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
-					`Always refactor in small steps.\n` +
 					`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
 					`Be aware that you only have access to a subset of the project\n` +
-					`Additional Rules\n` +
 					`Think step by step:\n` +
-					`1. Suggest code changes that eliminate code duplication and ensure the Once and Only Once principle.\n` +
-					`2. Suggest code changes that make the code easier to understand and maintain.\n` +
-					`3. Suggest improved local variable names that improve the readability.\n` +
-					`4. Provide suggestions that make the code more compact\n` +
-					`5. Provide suggestions if you see opportunities to improve code for performance, etc.\n` +
-					`6. Suggest code changes that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage()}\n` +
-					`Restrict the format used in your answers follows:` +
+					`Always refactor in small steps.\n` +
+					`Additional Rules\n` +
+					`1. Suggest refactorings that eliminate code duplication.\n` +
+					`2. Suggest refactorings that make the code easier to understand and maintain.\n` +
+					`3. Suggest rename refactorings of local variable names when it improves the readability.\n` +
+					`4. Make the code more efficient if possible.\n` +
+					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage()}\n` +
+					`Restrict the format used in your answers follows:\n` +
 					`1. Use Markdown formatting in your answers.\n` +
 					`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
 					`3. Avoid wrapping the whole response in triple backticks.\n` +
@@ -163,7 +174,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 		return {
 			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(vscode.window.activeTextEditor))
+		};
+	}
+
+	function getRefactoringTarget(editor: vscode.TextEditor): IRefactoringTarget {
+		const selection = editor.selection;
+		return {
+			documentPath: editor.document.uri.fsPath,
+			documentVersion: editor.document.version,
+			selectionStartLine: selection.start.line,
+			selectionStartCharacter: selection.start.character,
+			selectionEndLine: selection.end.line,
+			selectionEndCharacter: selection.end.character
 		};
 	}
 
@@ -212,7 +236,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 		return {
 			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code
+			originalCode: code,
+			refactoringTarget: ''
 		};
 	}
 
@@ -228,9 +253,43 @@ export function activate(context: vscode.ExtensionContext) {
 				fs.writeFileSync(refactoredFile, refactoredCode);
 				let originalUri = vscode.Uri.file(originalFile);
 				let refactoredUri = vscode.Uri.file(refactoredFile);
-				vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri, 'Refactoring');
-			} else {
-				vscode.window.showInformationMessage(`The refactoring agent answer does not contain the suggested refactored code in the expected format. Please try again.`);
+				let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
+				let annotatedURI = refactoredUri.with({ query: query });
+				await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
+			}
+		}),
+
+		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', async () => {
+			if (!vscode.window.activeTextEditor) {
+				vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
+				return;
+			}
+			let uri = vscode.window.activeTextEditor.document.uri;
+			let query = uri.query;
+			let params = new URLSearchParams(query);
+			let annotationString = params.get('refactoringTarget');
+			if (!annotationString) {
+				vscode.window.showInformationMessage(`The currently active editor does not suggest a refactoring to apply.`);
+				return;
+			}
+
+			let decodedString = decodeURIComponent(annotationString!);
+			let annotation:IRefactoringTarget = JSON.parse(decodedString!);
+			let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
+			let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
+			let replacement = vscode.window.activeTextEditor.document.getText();
+
+			let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
+    		let editor = await vscode.window.showTextDocument(doc);
+			if (editor.document.version !== annotation.documentVersion) {
+				vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
+				return;
+			}
+			let success = await editor.edit(editBuilder => {
+				editBuilder.replace(targetSelection, replacement!);
+			});
+			if (!success) {
+				vscode.window.showInformationMessage(`Failed to apply the suggested refactoring.`);
 			}
 		}),
 	);
