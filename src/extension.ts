@@ -164,6 +164,11 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
+		if(vscode.window.activeTextEditor.selection.isEmpty) {
+			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
+			return NO_REFACTORING_RESULT;
+		}
+		
 		const chatRequest = access.makeRequest(messages, {}, token);
 		let suggestedRefactoring = '';
 		for await (const fragment of chatRequest.response) {
