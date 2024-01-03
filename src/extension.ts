@@ -13,6 +13,7 @@ const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
 const SLASH_COMMAND_SMELLS = 'smells';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 
+// prompts
 const FORMAT_RESTRICTIONS =
 	`Restrict the format used in your answers follows:\n` +
 	`1. Use Markdown formatting in your answers.\n` +
@@ -49,14 +50,6 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 };
 
 export function activate(context: vscode.ExtensionContext) {
-
-	function getFullCode(): string {
-		if (!vscode.window.activeTextEditor) {
-			return '';
-		}
-		const editor = vscode.window.activeTextEditor;
-		return editor.document.getText();
-	}
 
 	function getSelectionCode(): string {
 		if (!vscode.window.activeTextEditor) {
