@@ -110,28 +110,21 @@ export function activate(context: vscode.ExtensionContext) {
 			return NO_REFACTORING_RESULT;
 		}
 
-		if (request.slashCommand?.name === SLASH_COMMAND_DUPLICATION) {
-			const refactoringResult = await suggestRefactoringsDuplication(request, token, progress);
-			return refactoringResult;
-		} else if (request.slashCommand?.name === SLASH_COMMAND_SMELLS) {
-			const refactoringResult = await suggestRefactoringsSmells(request, token, progress);
-			return refactoringResult;
-		} else if (request.slashCommand?.name === SLASH_COMMAND_PERFORMANCE) {
-			const refactoringResult = await suggestRefactoringsPerformance(request, token, progress);
-			return refactoringResult;
-		} else if (request.slashCommand?.name === SLASH_COMMAND_IDIOMATIC) {
-			const refactoringResult = await suggestRefactoringsIdiomatic(request, token, progress);
-			return refactoringResult;
-		} else if (request.slashCommand?.name === SLASH_COMMAND_UNDERSTANDABILITY) {
-			const refactoringResult = await suggestRefactoringsUnderstandability(request, token, progress);
-			return refactoringResult;
-		} else if (request.slashCommand?.name === SLASH_COMMAND_SUGGEST_EXTRACT_METHOD) {
-			const refactoringResult = await suggestExtractMethod(request, token, progress);
-			return refactoringResult;
-		}
-		else {
-			const refactoringResult = await suggestRefactorings(request, token, progress);
-			return refactoringResult;
+		switch (request.slashCommand?.name) {
+			case SLASH_COMMAND_DUPLICATION:
+				return await suggestRefactoringsDuplication(request, token, progress);
+			case SLASH_COMMAND_SMELLS:
+				return await suggestRefactoringsSmells(request, token, progress);
+			case SLASH_COMMAND_PERFORMANCE:
+				return await suggestRefactoringsPerformance(request, token, progress);
+			case SLASH_COMMAND_IDIOMATIC:
+				return await suggestRefactoringsIdiomatic(request, token, progress);
+			case SLASH_COMMAND_UNDERSTANDABILITY:
+				return await suggestRefactoringsUnderstandability(request, token, progress);
+			case SLASH_COMMAND_SUGGEST_EXTRACT_METHOD:
+				return await suggestExtractMethod(request, token, progress);
+			default:
+				return await suggestRefactorings(request, token, progress);
 		}
 	};
 
@@ -524,13 +517,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
 			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
-	
+
 			let previewContentProvider = new RefactoringPreviewContentProvider();
 			context.subscriptions.push(
 				vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
 			);
 			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
-	
+
 			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri);
 
 			// annotate the URI with a query parameter that contains the refactoring target
