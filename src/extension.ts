@@ -64,13 +64,15 @@ class RefactoringPreviewContentProvider implements vscode.TextDocumentContentPro
 		} else if (uri.path === `refactored${this.fileExtension}`) {
 			return this.refactoredContent;
 		}
-		return 'Failed to provide content for the given uri ${uri}';
+		return `Failed to provide content for the given uri ${uri}`;
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
 
-	function getSelectionCode(editor: vscode.TextEditor): string {
+	let previewContentProvider = new RefactoringPreviewContentProvider();
+
+	function getSelectedText(editor: vscode.TextEditor): string {
 		const selection = editor.selection;
 		return editor.document.getText(selection.with({ start: selection.start.with({ character: 0 }), end: selection.end.with({ character: editor.document.lineAt(selection.end.line).text.length }) }));
 	}
@@ -156,6 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
 	async function makeRequest(access: vscode.ChatAccess, messages: { role: vscode.ChatMessageRole; content: string; }[], token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, code: string, editor: vscode.TextEditor) {
 		const chatRequest = access.makeRequest(messages, {}, token);
 		let suggestedRefactoring = '';
+
 		for await (const fragment of chatRequest.response) {
 			suggestedRefactoring += fragment;
 			progress.report({ content: fragment });
@@ -172,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -198,7 +201,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -207,7 +209,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -236,7 +238,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -257,7 +259,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -266,7 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -286,7 +287,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -295,7 +295,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -316,7 +316,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -325,7 +324,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -347,7 +346,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -368,7 +366,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const access = await vscode.chat.requestChatAccess('copilot');
 
-		let code = getSelectionCode(editor);
+		let code = getSelectedText(editor);
 
 		const messages = [
 			{
@@ -394,7 +392,6 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -402,6 +399,7 @@ export function activate(context: vscode.ExtensionContext) {
 		agent,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
 		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', applyRefactoring),
+		vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
 	);
 
 	async function applyRefactoring() {
@@ -410,7 +408,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
 			return;
 		}
-		
+
 		let uri = activeTextEditor.document.uri;
 		let query = uri.query;
 		let params = new URLSearchParams(query);
@@ -429,7 +427,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
 		let editor = await vscode.window.showTextDocument(doc);
 		if (editor.document.version !== annotation.documentVersion) {
-			vscode.window.showInformationMessage(`The editor has changed, cannot apply the suggested refactoring.`);
+			vscode.window.showInformationMessage(`The editor contents has changed. It is no longer possible to apply the suggested refactoring.`);
 			return;
 		}
 		let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
@@ -452,12 +450,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
 			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
 
-			let previewContentProvider = new RefactoringPreviewContentProvider();
-			context.subscriptions.push(
-				vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
-			);
 			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
-
 			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri);
 
 			// annotate the URI with a query parameter that contains the refactoring target
