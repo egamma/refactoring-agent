@@ -158,6 +158,21 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
+	async function makeRequest(access: vscode.ChatAccess, messages: { role: vscode.ChatMessageRole; content: string; }[], token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, code: string, editor: vscode.TextEditor) {
+		const chatRequest = access.makeRequest(messages, {}, token);
+		let suggestedRefactoring = '';
+		for await (const fragment of chatRequest.response) {
+			suggestedRefactoring += fragment;
+			progress.report({ content: fragment });
+		}
+
+		return {
+			suggestedRefactoring: suggestedRefactoring,
+			originalCode: code,
+			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
+		};
+	}
+
 	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
@@ -189,18 +204,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
@@ -229,19 +233,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
@@ -271,18 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
@@ -311,18 +292,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
@@ -352,18 +322,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
@@ -394,18 +353,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: JSON.stringify(getRefactoringTarget(editor))
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	function getRefactoringTarget(editor: vscode.TextEditor): IRefactoringTarget {
@@ -452,17 +400,7 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		const chatRequest = access.makeRequest(messages, {}, token);
-		let suggestedRefactoring = '';
-		for await (const fragment of chatRequest.response) {
-			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
-		}
-		return {
-			suggestedRefactoring: suggestedRefactoring,
-			originalCode: code,
-			refactoringTarget: ''
-		};
+		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
 	context.subscriptions.push(
