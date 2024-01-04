@@ -12,7 +12,6 @@ const SLASH_COMMAND_SMELLS = 'smells';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 
 // prompts
-
 const BASIC_SYSTEM_MESSAGE =
 	`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
 	`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
@@ -65,7 +64,7 @@ class RefactoringPreviewContentProvider implements vscode.TextDocumentContentPro
 		} else if (uri.path === `refactored${this.fileExtension}`) {
 			return this.refactoredContent;
 		}
-		return '';
+		return 'Failed to provide content for the given uri ${uri}';
 	}
 }
 
@@ -85,11 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return '';
 	}
 
-	function getLanguage(): string {
-		if (!vscode.window.activeTextEditor) {
-			return '';
-		}
-		const editor = vscode.window.activeTextEditor;
+	function getLanguage(editor: vscode.TextEditor): string {
 		return editor.document.languageId;
 	}
 
@@ -192,7 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`2. Suggest refactorings that make the code easier to understand and maintain.\n` +
 					`3. Suggest rename refactorings of variable names when it improves the readability.\n` +
 					`4. Make the code more efficient if possible.\n` +
-					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage()}\n` +
+					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
@@ -310,7 +305,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`Think step by step:\n` +
 					`Additional Rule\n` +
 					`1. Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
-					`The language used in the code is ${getLanguage()}\n` +
+					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
@@ -341,7 +336,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`Additional Rule\n` +
 					`1. Suggest refactorings that make the code easier to understand and maintain.\n` +
 					`2. Suggest rename refactorings of variable names when it improves the readability.\n` +
-					`The language used in the code is ${getLanguage()}\n` +
+					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
@@ -415,6 +410,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(`There is no active editor, open an editor and try again.`);
 			return;
 		}
+		
 		let uri = activeTextEditor.document.uri;
 		let query = uri.query;
 		let params = new URLSearchParams(query);
