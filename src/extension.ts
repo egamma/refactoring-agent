@@ -168,8 +168,8 @@ export function activate(context: vscode.ExtensionContext) {
 				return [{
 					commandId: PREVIEW_REFACTORING,
 					args: [result],
-					message: 'Preview Refactoring',
-					title: vscode.l10n.t('Preview Refactoring'),
+					message: 'Show Diff & Apply',
+					title: vscode.l10n.t('Show Diff & Apply'),
 				}];
 			}
 		}
