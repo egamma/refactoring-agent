@@ -93,16 +93,6 @@ export function activate(context: vscode.ExtensionContext) {
 		return editor.document.languageId;
 	}
 
-	function getFileExtension(): string {
-		if (!vscode.window.activeTextEditor) {
-			return '';
-		}
-		const editor = vscode.window.activeTextEditor;
-		const filePath = editor.document.uri.fsPath;
-		const extension = path.extname(filePath);
-		return extension;
-	}
-
 	function removeFirstAndLastLine(text: string): string {
 		const lines = text.split('\n');
 		lines.shift();
@@ -529,7 +519,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
 		if (codeBlock.length) {
 			const refactoredCode = removeFirstAndLastLine(codeBlock);
-			const fileExtension = getFileExtension();
+			let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
+			const fileExtension = path.extname(target.documentPath);
 
 			const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
 			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
