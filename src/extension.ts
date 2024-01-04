@@ -399,6 +399,7 @@ export function activate(context: vscode.ExtensionContext) {
 		agent,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
 		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', applyRefactoring),
+		vscode.commands.registerCommand('refactoring-agent.suggestRefactoring', suggestRefactoringAction),
 		vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
 	);
 
@@ -461,6 +462,11 @@ export function activate(context: vscode.ExtensionContext) {
 			await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
 		}
 	};
+
+	async function suggestRefactoringAction() {
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring'});
+	}
+
 }
 
 export function deactivate() { }

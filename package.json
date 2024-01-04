@@ -19,7 +19,8 @@
     ],
     "enabledApiProposals": [
         "chatAgents2",
-        "chatRequestAccess"
+        "chatRequestAccess",
+        "interactive"
     ],
     "main": "./out/extension.js",
     "contributes": {
@@ -29,6 +30,11 @@
                 "title": "Apply Refactoring",
                 "category": "Refactoring Agent",
                 "icon": "$(check)"
+            },
+            {
+                "command": "refactoring-agent.suggestRefactoring",
+                "title": "Suggest Refactoring",
+                "category": "Refactoring Agent"
             }
         ],
         "menus": {
@@ -38,7 +44,14 @@
                     "group": "navigation",
                     "when": "resourceScheme == 'refactoring-preview'"
                 }
-            ]
+            ],
+			"copilot": [
+				{
+					"command": "refactoring-agent.suggestRefactoring",
+					"when": "!github.copilot.interactiveSession.disabled && !editorReadonly",
+					"group": "copilotAction@20"
+				}
+			]
         }
     },
     "scripts": {
