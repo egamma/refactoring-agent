@@ -14,13 +14,16 @@ const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 // prompts
 const BASIC_SYSTEM_MESSAGE =
 	`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
-	`Make refactoring suggestions that alter the code's its internal structure without changing the code's external behavior.\n` +
-	`Explain the refactoring suggestion in detail and explain why they improve the code. Finally, answer with the complete refactored code\n` +
+	`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
+	`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
+	`Make a refactoring suggestion that alters the code's its internal structure without changing the code's external behavior.\n` +
+	`Explain explain why the suggestion improves the code and explain which refactorings you have applied. Finally, answer with the complete refactored code.\n` +
 	`Always refactor in small steps.\n` +
+	`Always think step by step.\n` +
 	`Be aware that you only have access to a subset of the project\n`;
 
 const FORMAT_RESTRICTIONS =
-	`Restrict the format used in your answers follows:\n` +
+	`Restrict the format used in your answers as follows:\n` +
 	`1. Use Markdown formatting in your answers.\n` +
 	`2. Make sure to include the programming language name at the start of the Markdown code blocks.\n` +
 	`3. Avoid wrapping the whole response in triple backticks.\n` +
@@ -182,22 +185,23 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
-					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
-					`Think step by step:\n` +
-					`Additional Rules\n` +
-					`1. Suggest refactorings that eliminate code duplication.\n` +
-					`2. Suggest refactorings that make the code easier to understand and maintain.\n` +
-					`3. Suggest rename refactorings of variable names when it improves the readability.\n` +
-					`4. Make the code more efficient if possible.\n` +
-					`5. Suggest refactorings that make the code follow the language’s idioms and naming patterns. The language used in the code is ${getLanguage(editor)}\n` +
+					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
+					`As a user I want to analyze and then apply only one refactoring at a time\n` +	
+					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
+					`Here are some candidate suggestions:\n` +
+					`1. Suggest a refactoring that eliminates code duplication.\n` +
+					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
+					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
+					`4. Suggest a refactoring that makes the code more efficient.\n` +
+					`5. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +  
+					`   The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code:\n.` +
+					`Suggest the most important refactoring for the following code:\n.` +
 					`${code}`
 			},
 		];
@@ -443,8 +447,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function showPreview(arg: IRefactoringResult) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
+		
 		if (codeBlock.length) {
-			const refactoredCode = removeFirstAndLastLine(codeBlock);
+			let refactoredCode = removeFirstAndLastLine(codeBlock);
+			// HACK sometimes the model generates a code block with a leading dot. This could also be restricted in the prompt
+			if (refactoredCode.startsWith(".")) {
+				refactoredCode = refactoredCode.substring(1);
+			}
 			let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
 			const fileExtension = path.extname(target.documentPath);
 
