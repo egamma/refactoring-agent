@@ -58,7 +58,7 @@ class RefactoringPreviewContentProvider implements vscode.TextDocumentContentPro
 	private refactoredContent: string = '';
 	private fileExtension: string = '';
 	private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
-    public readonly onDidChange = this._onDidChange.event;
+	public readonly onDidChange = this._onDidChange.event;
 
 	updateContent(original: string, refactored: string, fileExtension: string) {
 		this.originalContent = original;
@@ -75,9 +75,9 @@ class RefactoringPreviewContentProvider implements vscode.TextDocumentContentPro
 		return `Failed to provide content for the given uri ${uri}`;
 	}
 
-    public update(uri: vscode.Uri) {
-        this._onDidChange.fire(uri);
-    }
+	public update(uri: vscode.Uri) {
+		this._onDidChange.fire(uri);
+	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -110,6 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
+		
 		if (!vscode.window.activeTextEditor) {
 			progress.report({ content: `There is no active editor, open an editor and try again.` });
 			return NO_REFACTORING_RESULT;
@@ -118,7 +119,7 @@ export function activate(context: vscode.ExtensionContext) {
 			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
 			return NO_REFACTORING_RESULT;
 		}
-		
+
 		switch (request.slashCommand?.name) {
 			case SLASH_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, progress);
@@ -135,7 +136,7 @@ export function activate(context: vscode.ExtensionContext) {
 			case SLASH_COMMAND_SUGGEST_ANOTHER:
 				const hasAssistantHistoryEntry = context.history.some(entry => entry.role === vscode.ChatMessageRole.Assistant);
 				if (!hasAssistantHistoryEntry) {
-					progress.report({ content: `The agent has not made any suggestions, yet.` });
+					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
 					return NO_REFACTORING_RESULT;
 				}
 				return await suggestAnotherRefactoring(request, token, progress);
@@ -209,14 +210,15 @@ export function activate(context: vscode.ExtensionContext) {
 				content:
 					BASIC_SYSTEM_MESSAGE +
 					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
-					`As a user I want to analyze and then apply only one refactoring at a time\n` +	
+					`As a user I want to analyze and then apply only one refactoring at a time\n` +
 					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
 					`Here are some candidate suggestions:\n` +
 					`1. Suggest a refactoring that eliminates code duplication.\n` +
 					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
 					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
-					`4. Suggest a refactoring that makes the code more efficient.\n` +
-					`5. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +  
+					`4. Suggest a refactoring that extracts magic numbers into a constant.\n` +
+					`5. Suggest a refactoring that makes the code more efficient.\n` +
+					`6. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
 					`   The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
@@ -242,20 +244,21 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`The user was not satisfied with the previous suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
+					`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 					`Select another suggestion from the list below:\n` +
 					`1. Suggest a refactoring that eliminates code duplication.\n` +
 					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
 					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
-					`4. Suggest a refactoring that makes the code more efficient.\n` +
-					`5. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +  
+					`4. Suggest a refactoring that extracts magic numbers into a constant.\n` +
+					`5. Suggest a refactoring that makes the code more efficient.\n` +
+					`6. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
 					`   The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
-					`Please suggest another refactoring for the following code:\n.` +
+					`Please suggest another differerent refactoring than the previous one for the following code:\n.` +
 					`${request.prompt}\n` +
 					`${code}`
 			},
@@ -502,9 +505,24 @@ export function activate(context: vscode.ExtensionContext) {
 
 	}
 
+	async function closeDiffEditorIfActive() {
+		const activeTextEditor = vscode.window.activeTextEditor;
+		if (!activeTextEditor) {
+			return;
+		}
+		let uri = activeTextEditor.document.uri;
+		let query = uri.query;
+		let params = new URLSearchParams(query);
+		let annotationString = params.get('refactoringTarget');
+		if (!annotationString) {
+			return;
+		}
+		await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+	}
+
 	async function showPreview(arg: IRefactoringResult) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
-		
+
 		if (codeBlock.length) {
 			let refactoredCode = removeFirstAndLastLine(codeBlock);
 			// HACK sometimes the model generates a code block with a leading dot. This could also be restricted in the prompt
@@ -532,12 +550,13 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	async function suggestAnotherRefactoringCommand() {
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring /suggestAnother'});
+		closeDiffEditorIfActive();
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring /suggestAnother' });
 	}
 
 	async function suggestRefactoringAction() {
 		// await vscode.commands.executeCommand('workbench.action.chat.clear'); @TODO: does not work
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring'});
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
 	}
 
 }
