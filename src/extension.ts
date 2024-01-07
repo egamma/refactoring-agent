@@ -536,6 +536,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function suggestRefactoringAction() {
+		// await vscode.commands.executeCommand('workbench.action.chat.clear'); @TODO: does not work
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring'});
 	}
 
