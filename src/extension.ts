@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 const PREVIEW_REFACTORING = 'refactoring.preview';
+const NEXT_REFACTORING = 'refactoring.next';
+
 
 // slash commands
 const SLASH_COMMAND_DUPLICATION = 'duplication';
@@ -10,6 +12,7 @@ const SLASH_COMMAND_UNDERSTANDABILITY = 'understandability';
 const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
 const SLASH_COMMAND_SMELLS = 'smells';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
+const SLASH_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 
 // prompts
 const BASIC_SYSTEM_MESSAGE =
@@ -115,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
 			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
 			return NO_REFACTORING_RESULT;
 		}
-
+		
 		switch (request.slashCommand?.name) {
 			case SLASH_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, progress);
@@ -129,6 +132,13 @@ export function activate(context: vscode.ExtensionContext) {
 				return await suggestRefactoringsUnderstandability(request, token, progress);
 			case SLASH_COMMAND_SUGGEST_EXTRACT_METHOD:
 				return await suggestExtractMethod(request, token, progress);
+			case SLASH_COMMAND_SUGGEST_ANOTHER:
+				const hasAssistantHistoryEntry = context.history.some(entry => entry.role === vscode.ChatMessageRole.Assistant);
+				if (!hasAssistantHistoryEntry) {
+					progress.report({ content: `The agent has not made any suggestions, yet.` });
+					return NO_REFACTORING_RESULT;
+				}
+				return await suggestAnotherRefactoring(request, token, progress);
 			default:
 				return await suggestRefactorings(request, token, progress);
 		}
@@ -146,7 +156,8 @@ export function activate(context: vscode.ExtensionContext) {
 				{ name: SLASH_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
 				{ name: SLASH_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
 				{ name: SLASH_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
-				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' }
+				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
+				{ name: SLASH_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' }
 			];
 		}
 	};
@@ -159,6 +170,12 @@ export function activate(context: vscode.ExtensionContext) {
 					args: [result],
 					message: 'Show Diff & Apply',
 					title: vscode.l10n.t('Show Diff & Apply'),
+				},
+				{
+					commandId: NEXT_REFACTORING,
+					args: [result],
+					message: 'Suggest Another',
+					title: vscode.l10n.t('Suggest Another'),
 				}];
 			}
 		}
@@ -213,6 +230,39 @@ export function activate(context: vscode.ExtensionContext) {
 		];
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
+
+	async function suggestAnotherRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getSelectedText(editor);
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`The user was not satisfied with the previous suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
+					`Select another suggestion from the list below:\n` +
+					`1. Suggest a refactoring that eliminates code duplication.\n` +
+					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
+					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
+					`4. Suggest a refactoring that makes the code more efficient.\n` +
+					`5. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +  
+					`   The language used in the code is ${getLanguage(editor)}\n` +
+					FORMAT_RESTRICTIONS
+			},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`Please suggest another refactoring for the following code:\n.` +
+					`${request.prompt}\n` +
+					`${code}`
+			},
+		];
+		return makeRequest(access, messages, token, progress, code, editor);
+	}
+
 
 	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
@@ -408,6 +458,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		agent,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
+		vscode.commands.registerCommand(NEXT_REFACTORING, suggestAnotherRefactoringCommand),
 		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', applyRefactoring),
 		vscode.commands.registerCommand('refactoring-agent.suggestRefactoring', suggestRefactoringAction),
 		vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
@@ -479,6 +530,10 @@ export function activate(context: vscode.ExtensionContext) {
 			await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
 		}
 	};
+
+	async function suggestAnotherRefactoringCommand() {
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring /suggestAnother'});
+	}
 
 	async function suggestRefactoringAction() {
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring'});
