@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+// commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
 const NEXT_REFACTORING = 'refactoring.next';
-
 
 // slash commands
 const SLASH_COMMAND_DUPLICATION = 'duplication';
@@ -38,7 +38,7 @@ const FORMAT_RESTRICTIONS =
 interface IRefactoringResult extends vscode.ChatAgentResult2 {
 	originalCode: string;
 	suggestedRefactoring: string;
-	refactoringTarget: string;
+	refactoringTarget: string; // a JSON stringified IRefactoringTarget
 }
 
 interface IRefactoringTarget {
@@ -99,7 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return originalDocs.get(documentPath);
 	}
 
-	let capturedDiagnostics:string = '';
+	let capturedDiagnostics: string = '';
 
 	function getSelectedText(editor: vscode.TextEditor): string {
 		const selection = editor.selection;
@@ -263,7 +263,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let diagnostics = '';
 		if (capturedDiagnostics.length) {
 			diagnostics = `The previous suggestion has added the following errors:\n` +
-					`${capturedDiagnostics}\n`;
+				`${capturedDiagnostics}\n`;
 		}
 		capturedDiagnostics = '';
 
@@ -555,7 +555,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 		let originalContent = editor.document.getText();
-		
+
 		let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
 		let success = await editor.edit(editBuilder => {
 			editBuilder.replace(targetSelection, replacement!);
@@ -590,37 +590,39 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function showPreview(arg: IRefactoringResult) {
 		const codeBlock = extractLastMarkdownCodeBlock(arg.suggestedRefactoring);
-
-		if (codeBlock.length) {
-			let refactoredCode = removeFirstAndLastLine(codeBlock);
-			// HACK sometimes the model generates a code block with a leading dot. This could also be restricted in the prompt
-			if (refactoredCode.startsWith(".")) {
-				refactoredCode = refactoredCode.substring(1);
-			}
-			let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
-			const fileExtension = path.extname(target.documentPath);
-
-			const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
-			const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
-
-			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
-			previewContentProvider.update(originalUri);
-			previewContentProvider.update(refactoredUri);
-
-			// annotate the URI with a query parameter that contains the refactoring target
-			// so that the refactoring can be applied later
-			let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
-			let annotatedURI = refactoredUri.with({ query: query });
-
-			await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
+		if (!codeBlock.length) {
+			return;
 		}
+		
+		let refactoredCode = removeFirstAndLastLine(codeBlock);
+		// HACK sometimes the model generates a code block with a leading dot. This could also be restricted in the prompt
+		if (refactoredCode.startsWith(".")) {
+			refactoredCode = refactoredCode.substring(1);
+		}
+		let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
+		const fileExtension = path.extname(target.documentPath);
+
+		const originalUri = vscode.Uri.parse(`refactoring-preview:original${fileExtension}`);
+		const refactoredUri = vscode.Uri.parse(`refactoring-preview:refactored${fileExtension}`);
+
+		previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
+		previewContentProvider.update(originalUri);
+		previewContentProvider.update(refactoredUri);
+
+		// annotate the URI with a query parameter that contains the refactoring target
+		// so that the refactoring can be applied later
+		let query = `refactoringTarget=${encodeURIComponent(arg.refactoringTarget)}`;
+		let annotatedURI = refactoredUri.with({ query: query });
+
+		await vscode.commands.executeCommand('vscode.diff', originalUri, annotatedURI, 'Suggested Refactoring');
+
 	};
 
 	async function suggestAnotherRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
 
-		await restoreOriginalContents(arg); 
-		
+		await restoreOriginalContents(arg);
+
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_ANOTHER}` });
 	}
 
@@ -649,9 +651,9 @@ export function activate(context: vscode.ExtensionContext) {
 		if (errors.length > 0) {
 			let result = '';
 			for (const diagnostic of diagnostics) {
-                const line = `${diagnostic.message} line ${diagnostic.range.start.line}\n`;
-                result += line;
-            }
+				const line = `${diagnostic.message} line ${diagnostic.range.start.line}\n`;
+				result += line;
+			}
 			return result;
 		};
 		return '';
