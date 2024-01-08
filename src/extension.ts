@@ -22,7 +22,7 @@ const BASIC_SYSTEM_MESSAGE =
 	`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
 	`Make a refactoring suggestion that alters the code's its internal structure without changing the code's external behavior.\n` +
 	`Explain explain why the refactoring suggestion improves the code and explain which refactorings you have applied:\n` +
-	`     Extract Method or Function, Extract Constant, Extract Variable, Rename, Inline Method or Function, Introduce Explaining Variable, ... ` + 
+	`     Extract Method or Function, Extract Constant, Extract Variable, Rename, Inline Method or Function, Introduce Explaining Variable, ... ` +
 	`Finally, answer with the complete refactored code.\n` +
 	`Always refactor in small steps.\n` +
 	`Always think step by step.\n` +
@@ -87,6 +87,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let previewContentProvider = new RefactoringPreviewContentProvider();
 
+	// The map stores the original contents of a document before a suggested refactoring is applied.
+	// It will be used to restore the original contents when the user request another suggestion.
+	let originalDocs = new Map<string, string>();
+
+	function saveOriginalDocument(documentPath: string, content: string) {
+		originalDocs.set(documentPath, content);
+	}
+
+	function getOriginalDocument(documentPath: string): string | undefined {
+		return originalDocs.get(documentPath);
+	}
+
+	let capturedDiagnostics:string = '';
+
 	function getSelectedText(editor: vscode.TextEditor): string {
 		const selection = editor.selection;
 		return editor.document.getText(selection.with({ start: selection.start.with({ character: 0 }), end: selection.end.with({ character: editor.document.lineAt(selection.end.line).text.length }) }));
@@ -113,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
-		
+
 		if (!vscode.window.activeTextEditor) {
 			progress.report({ content: `There is no active editor, open an editor and try again.` });
 			return NO_REFACTORING_RESULT;
@@ -246,12 +260,20 @@ export function activate(context: vscode.ExtensionContext) {
 
 		let code = getSelectedText(editor);
 
+		let diagnostics = '';
+		if (capturedDiagnostics.length) {
+			diagnostics = `The previous suggestion has added the following errors:\n` +
+					`${capturedDiagnostics}\n`;
+		}
+		capturedDiagnostics = '';
+
 		const messages = [
 			{
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
 					`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
+					`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
 					`Select another suggestion from the list below:\n` +
 					`1. Suggest a refactoring that eliminates code duplication.\n` +
 					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
@@ -265,6 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
+					`${diagnostics}\n` +
 					`Please suggest another differerent refactoring than the previous one for the following code:\n.` +
 					`${request.prompt}\n` +
 					`${code}`
@@ -531,11 +554,20 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(`The editor contents has changed. It is no longer possible to apply the suggested refactoring.`);
 			return;
 		}
+		let originalContent = editor.document.getText();
+		
 		let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
 		let success = await editor.edit(editBuilder => {
 			editBuilder.replace(targetSelection, replacement!);
 		});
-		if (!success) {
+		if (success) {
+			// store the original document content in the document store
+			try {
+				saveOriginalDocument(annotation.documentPath, originalContent);
+			} catch (error) {
+				vscode.window.showInformationMessage(`Failed to store the original document content in the document store.`);
+			}
+		} else {
 			vscode.window.showInformationMessage(`Failed to apply the suggested refactoring.`);
 		}
 
@@ -585,9 +617,42 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	async function suggestAnotherRefactoringCommand() {
+	async function suggestAnotherRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring /suggestAnother' });
+
+		let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
+		let targetDocumentUri = vscode.Uri.file(target.documentPath);
+		let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
+		let originalContent = getOriginalDocument(target.documentPath);
+		
+		// restore the original content if it is available
+		if (originalContent) {
+			capturedDiagnostics = captureDiagnosticsForDocument(targetDocumentUri); // @TODO: find a better solution
+	
+			const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
+			let editor = await vscode.window.showTextDocument(doc);
+	
+			await editor.edit(editBuilder => {
+				editBuilder.replace(fullRange, originalContent!);
+			});
+			editor.selection = new vscode.Selection(target.selectionStartLine, target.selectionStartCharacter, target.selectionEndLine, target.selectionEndCharacter);		
+		} 
+		
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_ANOTHER}` });
+	}
+
+	function captureDiagnosticsForDocument(targetDocumentUri: vscode.Uri) {
+		const diagnostics = vscode.languages.getDiagnostics(targetDocumentUri);
+		const errors = diagnostics.filter(diagnostic => diagnostic.severity === vscode.DiagnosticSeverity.Error);
+		if (errors.length > 0) {
+			let result = '';
+			for (const diagnostic of diagnostics) {
+                const line = `${diagnostic.message} line ${diagnostic.range.start.line}\n`;
+                result += line;
+            }
+			return result;
+		};
+		return '';
 	}
 
 	async function suggestRefactoringAction() {
