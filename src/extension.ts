@@ -11,6 +11,7 @@ const SLASH_COMMAND_PERFORMANCE = 'performance';
 const SLASH_COMMAND_UNDERSTANDABILITY = 'understandability';
 const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
 const SLASH_COMMAND_SMELLS = 'smells';
+const SLASH_COMMAND_ERROR_HANDLING = 'errorHandling';
 const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 const SLASH_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 
@@ -133,6 +134,8 @@ export function activate(context: vscode.ExtensionContext) {
 				return await suggestRefactoringsIdiomatic(request, token, progress);
 			case SLASH_COMMAND_UNDERSTANDABILITY:
 				return await suggestRefactoringsUnderstandability(request, token, progress);
+			case SLASH_COMMAND_ERROR_HANDLING:
+				return await suggestRefactoringsErrorHandling(request, token, progress);
 			case SLASH_COMMAND_SUGGEST_EXTRACT_METHOD:
 				return await suggestExtractMethod(request, token, progress);
 			case SLASH_COMMAND_SUGGEST_ANOTHER:
@@ -159,6 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
 				{ name: SLASH_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
 				{ name: SLASH_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
 				{ name: SLASH_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
+				{ name: SLASH_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
 				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
 				{ name: SLASH_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' }
 			];
@@ -212,7 +216,7 @@ export function activate(context: vscode.ExtensionContext) {
 				content:
 					BASIC_SYSTEM_MESSAGE +
 					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
-					`As a user I want to analyze and then apply only one refactoring at a time\n` +
+					`As a user I want to analyze and then apply only one refactoring at a time.\n` +
 					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
 					`Here are some candidate suggestions:\n` +
 					`1. Suggest a refactoring that eliminates code duplication.\n` +
@@ -220,7 +224,8 @@ export function activate(context: vscode.ExtensionContext) {
 					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
 					`4. Suggest a refactoring that extracts magic numbers into a constant.\n` +
 					`5. Suggest a refactoring that makes the code more efficient.\n` +
-					`6. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
+					`6. Suggest a refactoring that improves the error handling.\n` +
+					`7. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
 					`   The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
@@ -408,6 +413,35 @@ export function activate(context: vscode.ExtensionContext) {
 				content:
 					`${request.prompt}\n` +
 					`Suggest refactorings for the following code that make the code easier to understand:\n.` +
+					`${code}`
+			},
+		];
+		return makeRequest(access, messages, token, progress, code, editor);
+	}
+
+	async function suggestRefactoringsErrorHandling(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+		let editor = vscode.window.activeTextEditor!;
+
+		const access = await vscode.chat.requestChatAccess('copilot');
+
+		let code = getSelectedText(editor);
+
+		const messages = [
+			{
+				role: vscode.ChatMessageRole.System,
+				content:
+					BASIC_SYSTEM_MESSAGE +
+					`Think step by step:\n` +
+					`Additional Rule\n` +
+					`1. Suggest refactorings that improve the error handling and make the code more robus and maintainable.\n` +
+					`The language used in the code is ${getLanguage(editor)}\n` +
+					FORMAT_RESTRICTIONS
+			},
+			{
+				role: vscode.ChatMessageRole.User,
+				content:
+					`${request.prompt}\n` +
+					`Suggest refactorings for the following code that improve the error handling:\n.` +
 					`${code}`
 			},
 		];
