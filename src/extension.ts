@@ -606,7 +606,6 @@ export function activate(context: vscode.ExtensionContext) {
 			previewContentProvider.updateContent(arg.originalCode, refactoredCode, fileExtension);
 			previewContentProvider.update(originalUri);
 			previewContentProvider.update(refactoredUri);
-			vscode.commands.executeCommand('vscode.diff', originalUri, refactoredUri);
 
 			// annotate the URI with a query parameter that contains the refactoring target
 			// so that the refactoring can be applied later
@@ -620,25 +619,28 @@ export function activate(context: vscode.ExtensionContext) {
 	async function suggestAnotherRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
 
+		await restoreOriginalContents(arg); 
+		
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_ANOTHER}` });
+	}
+
+	async function restoreOriginalContents(arg: IRefactoringResult) {
 		let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
 		let targetDocumentUri = vscode.Uri.file(target.documentPath);
 		let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
 		let originalContent = getOriginalDocument(target.documentPath);
-		
-		// restore the original content if it is available
+
 		if (originalContent) {
 			capturedDiagnostics = captureDiagnosticsForDocument(targetDocumentUri); // @TODO: find a better solution
-	
+
 			const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
 			let editor = await vscode.window.showTextDocument(doc);
-	
+
 			await editor.edit(editBuilder => {
 				editBuilder.replace(fullRange, originalContent!);
 			});
-			editor.selection = new vscode.Selection(target.selectionStartLine, target.selectionStartCharacter, target.selectionEndLine, target.selectionEndCharacter);		
-		} 
-		
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_ANOTHER}` });
+			editor.selection = new vscode.Selection(target.selectionStartLine, target.selectionStartCharacter, target.selectionEndLine, target.selectionEndCharacter);
+		}
 	}
 
 	function captureDiagnosticsForDocument(targetDocumentUri: vscode.Uri) {
