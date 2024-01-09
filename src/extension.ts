@@ -187,7 +187,8 @@ export function activate(context: vscode.ExtensionContext) {
 				{ name: SLASH_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
 				{ name: SLASH_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
 				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
-				{ name: SLASH_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' }
+				{ name: SLASH_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
+				{ name: SLASH_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
 			];
 		}
 	};
@@ -262,6 +263,16 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	async function suggestNextRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+		const suggestionTopics = [
+			`Suggest a refactoring that eliminates code duplication.\n`,
+			`Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n`,
+			`Suggest a refactoring that makes the code more efficient.\n`,
+			`Suggest a refactoring that improves the error handling.\n`,
+			`Suggest a refactoring that makes the code follow the language's idioms and naming patterns better.`
+		];
+		const randomIndex = Math.floor(Math.random() * suggestionTopics.length);
+		const randomSuggestion = suggestionTopics[randomIndex];
+		
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
 
@@ -272,14 +283,14 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`The user has applied the previous refactoring suggestion. Please suggest the next important refactoring.\n` +
-					`When making the next suggestion, then compare it with the previous suggestion. If the new suggestion is too similar, then do not suggest it again, but suggest another refactoring.\n` +
+					`The user has applied the previous refactoring suggestion, please make another suggestion.\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
+					`${randomSuggestion}\n` +
 					`${code}`
 			},
 		];
@@ -306,14 +317,10 @@ export function activate(context: vscode.ExtensionContext) {
 					BASIC_SYSTEM_MESSAGE +
 					`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 					`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
-					`Select another suggestion from the list below:\n` +
-					`1. Suggest a refactoring that eliminates code duplication.\n` +
-					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
-					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
-					`4. Suggest a refactoring that extracts magic numbers into a constant.\n` +
-					`5. Suggest a refactoring that makes the code more efficient.\n` +
-					`6. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
-					`   The language used in the code is ${getLanguage(editor)}\n` +
+					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
+					`As a user I want to analyze and then apply only one refactoring at a time.\n` +
+					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
+					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
