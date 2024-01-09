@@ -247,22 +247,14 @@ export function activate(context: vscode.ExtensionContext) {
 					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
 					`As a user I want to analyze and then apply only one refactoring at a time.\n` +
 					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
-					`Here are some candidate suggestions:\n` +
-					`1. Suggest a refactoring that eliminates code duplication.\n` +
-					`2. Suggest a refactoring that makes the code easier to understand and maintain.\n` +
-					`3. Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n` +
-					`4. Suggest a refactoring that extracts magic numbers into a constant.\n` +
-					`5. Suggest a refactoring that makes the code more efficient.\n` +
-					`6. Suggest a refactoring that improves the error handling.\n` +
-					`7. Suggest a refactoring that makes the code follow the language's idioms and naming patterns better. \n` +
-					`   The language used in the code is ${getLanguage(editor)}\n` +
+					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest the most important refactoring for the following code:\n.` +
+					`Suggest a refactoring for the following code:\n.` +
 					`${code}`
 			},
 		];
