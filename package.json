@@ -2,7 +2,7 @@
     "name": "refactoring-agent",
     "publisher": "vscode-samples",
     "displayName": "Refactoring Agent",
-    "description": "An agent for suggesting refactorings for the current file or selection.",
+    "description": "An agent for suggesting refactorings for the current selection.",
 
     "version": "0.1.0",
     "engines": {
