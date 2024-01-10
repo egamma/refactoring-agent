@@ -24,8 +24,14 @@ const BASIC_SYSTEM_MESSAGE =
 	`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
 	`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
 	`Make a refactoring suggestion that alters the code's its internal structure without changing the code's external behavior.\n` +
-	`Explain explain why the refactoring suggestion improves the code and explain which refactorings you have applied:\n` +
-	`     Extract Method or Function, Extract Constant, Extract Variable, Rename, Inline Method or Function, Introduce Explaining Variable, ... ` +
+	`Explain explain why the refactoring suggestion improves the code. \n` +
+	`Explain which refactorings you have applied. These are some popular refactorings:\n` +
+	`- Extract Method or Function\n` +
+	`- Extract Constant\n` +
+	`- Extract Variable\n`  +
+	`- Rename a Variable or Function\n` + 
+	`- Inline Method or Function`+
+	`- Introduce Explaining Variable\n` +
 	`Finally, answer with the complete refactored code.\n` +
 	`Always refactor in small steps.\n` +
 	`Always think step by step.\n` +
@@ -219,6 +225,7 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	async function makeRequest(access: vscode.ChatAccess, messages: { role: vscode.ChatMessageRole; content: string; }[], token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, code: string, editor: vscode.TextEditor) {
+		// dumpPrompt(messages);
 		const chatRequest = access.makeRequest(messages, {}, token);
 		let suggestedRefactoring = '';
 
@@ -245,20 +252,24 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
-					`As a user I want to analyze and then apply only one refactoring at a time.\n` +
-					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
-					`The language used in the code is ${getLanguage(editor)}\n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
+					`\n` +
+					`Suggest refactorings that:\n` +
+					`- eliminate code duplication.\n` +
+					`- ensure that the code uses the language's idioms and ensures that modern language features are used.\n` + 
+					`- improve the readability by improving the names of variables.\n` +
+					`- improve the error handling.\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest a refactoring for the following code:\n.` +
+					`Suggest refactorings for the following code:\n` +
 					`${code}`
 			},
 		];
+
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
 
@@ -284,13 +295,17 @@ export function activate(context: vscode.ExtensionContext) {
 				content:
 					BASIC_SYSTEM_MESSAGE +
 					`The user has applied the previous refactoring suggestion, please make another suggestion.\n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
+					`\n` +
+					`${randomSuggestion}\n` +
+					`\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`${randomSuggestion}\n` +
+					`Suggest refactorings for the following code:\n` +
 					`${code}`
 			},
 		];
@@ -317,9 +332,6 @@ export function activate(context: vscode.ExtensionContext) {
 					BASIC_SYSTEM_MESSAGE +
 					`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 					`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
-					`Suggest one refactoring at a time that improves the quality of the code the most.\n` +
-					`As a user I want to analyze and then apply only one refactoring at a time.\n` +
-					`Prioritize refactorings that improve the maintainability and understandability of the code.\n` +
 					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
@@ -327,14 +339,14 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${diagnostics}\n` +
-					`Please suggest another differerent refactoring than the previous one for the following code:\n.` +
+					`\n` +
+					`Please suggest another and differerent refactoring than the previous one for the following code:\n` +
 					`${request.prompt}\n` +
 					`${code}`
 			},
 		];
 		return makeRequest(access, messages, token, progress, code, editor);
 	}
-
 
 	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
@@ -348,17 +360,15 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
-					`1. Suggest refactorings that eliminate code duplication.\n` +
+					`Suggest refactorings that eliminate code duplication.\n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that reduce code duplication:\n.` +
+					`Suggest refactorings for the following code:\n` +
 					`${code}`
 			},
 		];
@@ -377,17 +387,15 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
-					`1. Suggest refactorings that eliminate code smells.\n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
+					`Suggest refactorings that eliminate code smells.\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that reduce code smells:\n.` +
+					`Suggest refactorings for the following code that reduce code smells:\n` +
 					`${code}`
 			},
 		];
@@ -406,16 +414,15 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
-					`1. Suggest refactorings that make the code more performant.\n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
+					`Suggest refactorings that make the code more performant.\n` +
 					FORMAT_RESTRICTIONS
 			},
 			{
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that improve the performance:\n.` +
+					`Suggest refactorings for the following code that improve the performance:\n` +
 					`${code}`
 			},
 		];
@@ -434,9 +441,8 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
-					`1. Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
+					`The language used in the selected code is ${getLanguage(editor)}\n` +
+					`Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
 					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
@@ -444,7 +450,7 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that make the code follow the language's idioms and naming patterns:\n.` +
+					`Suggest refactorings for the following code that make the code follow the language's idioms and naming patterns:\n` +
 					`${code}`
 			},
 		];
@@ -463,10 +469,8 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
-					`1. Suggest refactorings that make the code easier to understand and maintain.\n` +
-					`2. Suggest rename refactorings of variable names when it improves the readability.\n` +
+					`Suggest refactorings that make the code easier to understand and maintain.\n` +
+					`Suggest rename refactorings of variable names when it improves the readability.\n` +
 					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
 			},
@@ -474,7 +478,7 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that make the code easier to understand:\n.` +
+					`Suggest refactorings for the following code that make the code easier to understand:\n` +
 					`${code}`
 			},
 		];
@@ -493,8 +497,6 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.System,
 				content:
 					BASIC_SYSTEM_MESSAGE +
-					`Think step by step:\n` +
-					`Additional Rule\n` +
 					`1. Suggest refactorings that improve the error handling and make the code more robus and maintainable.\n` +
 					`The language used in the code is ${getLanguage(editor)}\n` +
 					FORMAT_RESTRICTIONS
@@ -503,7 +505,7 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest refactorings for the following code that improve the error handling:\n.` +
+					`Suggest refactorings for the following code that improve the error handling:\n` +
 					`${code}`
 			},
 		];
@@ -549,7 +551,7 @@ export function activate(context: vscode.ExtensionContext) {
 				role: vscode.ChatMessageRole.User,
 				content:
 					`${request.prompt}\n` +
-					`Suggest extract method refactorings to reduce code duplication for the following code:\n.` +
+					`Suggest extract method refactorings to reduce code duplication for the following code:\n` +
 					`${code}`
 			},
 		];
@@ -635,10 +637,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		let refactoredCode = removeFirstAndLastLine(codeBlock);
-		// HACK sometimes the model generates a code block with a leading dot. This could also be restricted in the prompt
-		if (refactoredCode.startsWith(".")) {
-			refactoredCode = refactoredCode.substring(1);
-		}
+
 		let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
 		const fileExtension = path.extname(target.documentPath);
 
@@ -708,7 +707,15 @@ export function activate(context: vscode.ExtensionContext) {
 		// await vscode.commands.executeCommand('workbench.action.chat.clear'); @TODO: does not work
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
 	}
-
+	
+	// debugging aid
+	function dumpPrompt(messages: { role: vscode.ChatMessageRole; content: string; }[]) {
+		for (const message of messages) {
+			console.log(`Role: ${message.role}`);
+			console.log(`Content: ${message.content}`);
+			console.log('---');
+		}
+	}
 }
 
 export function deactivate() { }
