@@ -212,13 +212,13 @@ export function activate(context: vscode.ExtensionContext) {
 					commandId: NEXT_REFACTORING,
 					args: [result],
 					message: 'Suggest Next',
-					title: vscode.l10n.t('\u{1F44D} Suggest Next'),
+					title: vscode.l10n.t('$(thumbsup) Suggest Next'),
 				},
 				{
 					commandId: ANOTHER_REFACTORING,
 					args: [result],
 					message: 'Suggest Another',
-					title: vscode.l10n.t('\u{1F44E} Suggest Another'),
+					title: vscode.l10n.t('$(thumbsdown) Suggest Another'),
 				}];
 			}
 		}
