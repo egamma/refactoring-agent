@@ -65,6 +65,10 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 	refactoringTarget: ''
 };
 
+function isRefactoringResult(result: vscode.ChatAgentResult2): result is IRefactoringResult {
+	return 'suggestedRefactoring' in result && result.suggestedRefactoring !== '';
+}
+
 class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
 	private originalContent: string = '';
 	private refactoredContent: string = '';
@@ -146,8 +150,8 @@ export function activate(context: vscode.ExtensionContext) {
 			return NO_REFACTORING_RESULT;
 		}
 
-		const hasAssistantHistoryEntry = context.history.some(entry => entry.role === vscode.ChatMessageRole.Assistant);
-		switch (request.slashCommand?.name) {
+		const hasAssistantHistoryEntry = context.history.some(entry => isRefactoringResult(entry.result));
+		switch (request.subCommand) {
 			case SLASH_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, progress);
 			case SLASH_COMMAND_SMELLS:
@@ -183,8 +187,8 @@ export function activate(context: vscode.ExtensionContext) {
 	agent.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 	agent.description = vscode.l10n.t('Suggest refactorings');
 	agent.fullName = vscode.l10n.t('Suggest Refactorings');
-	agent.slashCommandProvider = {
-		provideSlashCommands(token) {
+	agent.subCommandProvider = {
+		provideSubCommands(token) {
 			return [
 				{ name: SLASH_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
 				{ name: SLASH_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
