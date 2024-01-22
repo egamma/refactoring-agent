@@ -6,16 +6,16 @@ const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
 const NEXT_REFACTORING = 'refactoring.next';
 
-// slash commands
-const SLASH_COMMAND_DUPLICATION = 'duplication';
-const SLASH_COMMAND_PERFORMANCE = 'performance';
-const SLASH_COMMAND_UNDERSTANDABILITY = 'understandability';
-const SLASH_COMMAND_IDIOMATIC = 'idiomatic';
-const SLASH_COMMAND_SMELLS = 'smells';
-const SLASH_COMMAND_ERROR_HANDLING = 'errorHandling';
-const SLASH_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
-const SLASH_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
-const SLASH_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
+// sub commands
+const SUB_COMMAND_DUPLICATION = 'duplication';
+const SUB_COMMAND_PERFORMANCE = 'performance';
+const SUB_COMMAND_UNDERSTANDABILITY = 'understandability';
+const SUB_COMMAND_IDIOMATIC = 'idiomatic';
+const SUB_COMMAND_SMELLS = 'smells';
+const SUB_COMMAND_ERROR_HANDLING = 'errorHandling';
+const SUB_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
+const SUB_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
+const SUB_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
 
 
 // prompts
@@ -152,27 +152,27 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const hasAssistantHistoryEntry = context.history.some(entry => isRefactoringResult(entry.result));
 		switch (request.subCommand) {
-			case SLASH_COMMAND_DUPLICATION:
+			case SUB_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, progress);
-			case SLASH_COMMAND_SMELLS:
+			case SUB_COMMAND_SMELLS:
 				return await suggestRefactoringsSmells(request, token, progress);
-			case SLASH_COMMAND_PERFORMANCE:
+			case SUB_COMMAND_PERFORMANCE:
 				return await suggestRefactoringsPerformance(request, token, progress);
-			case SLASH_COMMAND_IDIOMATIC:
+			case SUB_COMMAND_IDIOMATIC:
 				return await suggestRefactoringsIdiomatic(request, token, progress);
-			case SLASH_COMMAND_UNDERSTANDABILITY:
+			case SUB_COMMAND_UNDERSTANDABILITY:
 				return await suggestRefactoringsUnderstandability(request, token, progress);
-			case SLASH_COMMAND_ERROR_HANDLING:
+			case SUB_COMMAND_ERROR_HANDLING:
 				return await suggestRefactoringsErrorHandling(request, token, progress);
-			case SLASH_COMMAND_SUGGEST_EXTRACT_METHOD:
+			case SUB_COMMAND_SUGGEST_EXTRACT_METHOD:
 				return await suggestExtractMethod(request, token, progress);
-			case SLASH_COMMAND_SUGGEST_NEXT:
+			case SUB_COMMAND_SUGGEST_NEXT:
 				if (!hasAssistantHistoryEntry) {
 					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
 					return NO_REFACTORING_RESULT;
 				}
 				return await suggestNextRefactoring(request, token, progress);
-			case SLASH_COMMAND_SUGGEST_ANOTHER:
+			case SUB_COMMAND_SUGGEST_ANOTHER:
 				if (!hasAssistantHistoryEntry) {
 					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
 					return NO_REFACTORING_RESULT;
@@ -190,15 +190,15 @@ export function activate(context: vscode.ExtensionContext) {
 	agent.subCommandProvider = {
 		provideSubCommands(token) {
 			return [
-				{ name: SLASH_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
-				{ name: SLASH_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
-				{ name: SLASH_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
-				{ name: SLASH_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
-				{ name: SLASH_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
-				{ name: SLASH_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
-				{ name: SLASH_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
-				{ name: SLASH_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
-				{ name: SLASH_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
+				{ name: SUB_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
+				{ name: SUB_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
+				{ name: SUB_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
+				{ name: SUB_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
+				{ name: SUB_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
+				{ name: SUB_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
+				{ name: SUB_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
+				{ name: SUB_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
+				{ name: SUB_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
 			];
 		}
 	};
@@ -666,12 +666,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		await restoreOriginalContents(arg);
 
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_ANOTHER}` });
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SUB_COMMAND_SUGGEST_ANOTHER}` });
 	}
 
 	async function suggestNextRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SLASH_COMMAND_SUGGEST_NEXT}` });
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SUB_COMMAND_SUGGEST_NEXT}` });
 	}
 
 	async function restoreOriginalContents(arg: IRefactoringResult) {
