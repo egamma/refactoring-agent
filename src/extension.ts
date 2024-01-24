@@ -28,9 +28,9 @@ const BASIC_SYSTEM_MESSAGE =
 	`Explain which refactorings you have applied. These are some popular refactorings:\n` +
 	`- Extract Method or Function\n` +
 	`- Extract Constant\n` +
-	`- Extract Variable\n`  +
-	`- Rename a Variable or Function\n` + 
-	`- Inline Method or Function`+
+	`- Extract Variable\n` +
+	`- Rename a Variable or Function\n` +
+	`- Inline Method or Function` +
 	`- Introduce Explaining Variable\n` +
 	`Finally, answer with the complete refactored code.\n` +
 	`Always refactor in small steps.\n` +
@@ -139,12 +139,23 @@ export function activate(context: vscode.ExtensionContext) {
 		return lines.join('\n');
 	}
 
+	function findEnclosingSymbol(rootSymbols: vscode.DocumentSymbol[], position: vscode.Position): vscode.DocumentSymbol | undefined {
+		for (const symbol of rootSymbols) {
+			if (symbol.range.contains(position)) {
+				const enclosingChild = findEnclosingSymbol(symbol.children, position);
+				return enclosingChild || symbol;
+			}
+		}
+		return undefined;
+	}
+
 	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
 
 		if (!vscode.window.activeTextEditor) {
 			progress.report({ content: `There is no active editor, open an editor and try again.` });
 			return NO_REFACTORING_RESULT;
 		}
+
 		if (vscode.window.activeTextEditor.selection.isEmpty) {
 			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
 			return NO_REFACTORING_RESULT;
@@ -260,7 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`\n` +
 					`Suggest refactorings that:\n` +
 					`- eliminate code duplication.\n` +
-					`- ensure that the code uses the language's idioms and ensures that modern language features are used.\n` + 
+					`- ensure that the code uses the language's idioms and ensures that modern language features are used.\n` +
 					`- improve the readability by improving the names of variables.\n` +
 					`- improve the error handling.\n` +
 					FORMAT_RESTRICTIONS
@@ -287,7 +298,7 @@ export function activate(context: vscode.ExtensionContext) {
 		];
 		const randomIndex = Math.floor(Math.random() * suggestionTopics.length);
 		const randomSuggestion = suggestionTopics[randomIndex];
-		
+
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.chat.requestChatAccess('copilot');
 
@@ -709,9 +720,31 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function suggestRefactoringAction() {
 		// await vscode.commands.executeCommand('workbench.action.chat.clear'); @TODO: does not work
+
+		if (vscode.window.activeTextEditor) {
+			let selection = vscode.window.activeTextEditor.selection;
+			if (selection.isEmpty) {
+				await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection);
+			}
+		}
+
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
 	}
-	
+
+	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection) {
+		let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
+		
+		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
+		if (result.length > 0 && !result[0].hasOwnProperty('children'))	{
+			return;
+		}
+
+		let enclosingSymbol = findEnclosingSymbol(result, selection.active);
+		if (enclosingSymbol) {
+			editor.selection = new vscode.Selection(enclosingSymbol.range.start, enclosingSymbol.range.end);
+		}
+	}
+
 	// debugging aid
 	function dumpPrompt(messages: { role: vscode.ChatMessageRole; content: string; }[]) {
 		for (const message of messages) {
