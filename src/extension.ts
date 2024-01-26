@@ -729,7 +729,7 @@ export function activate(context: vscode.ExtensionContext) {
 			let selection = vscode.window.activeTextEditor.selection;
 			if (selection.isEmpty) {
 				if (!await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection)) {
-					return
+					return;
 				};
 			}
 		}
@@ -739,30 +739,39 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection): Promise<boolean> {
 		let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
-		
+
 		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
 		if (result.length > 0 && !result[0].hasOwnProperty('children')) {
 			return false;
 		}
 
+		let initialSelection = editor.selection;
 		let enclosingSymbols = findEnclosingSymbol(result, selection.active);
 		if (enclosingSymbols && enclosingSymbols.length > 0) {
-			let pickedSymbol = await vscode.window.showQuickPick(
-				enclosingSymbols.reverse().map(symbol => ({ label: symbol.name })), { title: 'Select an Enclosing Symbol' });
-			if (pickedSymbol) {
-				let symbol = enclosingSymbols.find(symbol => symbol.name === pickedSymbol!.label);
-				if (symbol) {
-					editor.selection = new vscode.Selection(symbol.range.start, symbol.range.end);
-				}
-			} else {
+			let quickPickItems = enclosingSymbols.reverse().map(symbol => ({ label: symbol.name, symbol }));
+			let pickedItem = await vscode.window.showQuickPick(quickPickItems, {
+				title: 'Select an Enclosing Range',
+				onDidSelectItem(item) {
+					let symbol = (item as any).symbol;
+					if (symbol) {
+						editor.selection = new vscode.Selection(symbol.range.start, symbol.range.end);
+					}
+				},
+			});
+			if (!pickedItem) {
+				editor.selection = initialSelection;
 				return false;
 			}
 		} else {
-			let start = new vscode.Position(0, 0);
-			let end = new vscode.Position(editor.document.lineCount - 1, editor.document.lineAt(editor.document.lineCount - 1).text.length);
-			editor.selection = new vscode.Selection(start, end);
+			selectAll(editor);
 		}
 		return true;
+	}
+
+	function selectAll(editor: vscode.TextEditor) {
+		let start = new vscode.Position(0, 0);
+		let end = new vscode.Position(editor.document.lineCount - 1, editor.document.lineAt(editor.document.lineCount - 1).text.length);
+		editor.selection = new vscode.Selection(start, end);
 	}
 
 	// debugging aid
