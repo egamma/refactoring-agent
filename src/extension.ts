@@ -139,11 +139,15 @@ export function activate(context: vscode.ExtensionContext) {
 		return lines.join('\n');
 	}
 
-	function findEnclosingSymbol(rootSymbols: vscode.DocumentSymbol[], position: vscode.Position): vscode.DocumentSymbol | undefined {
+	function findEnclosingSymbol(rootSymbols: vscode.DocumentSymbol[], position: vscode.Position): vscode.DocumentSymbol[] | undefined {
 		for (const symbol of rootSymbols) {
 			if (symbol.range.contains(position)) {
 				const enclosingChild = findEnclosingSymbol(symbol.children, position);
-				return enclosingChild || symbol;
+				if (enclosingChild) {
+					return [symbol, ...enclosingChild];
+				} else {
+					return [symbol];
+				}
 			}
 		}
 		return undefined;
@@ -724,25 +728,41 @@ export function activate(context: vscode.ExtensionContext) {
 		if (vscode.window.activeTextEditor) {
 			let selection = vscode.window.activeTextEditor.selection;
 			if (selection.isEmpty) {
-				await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection);
+				if (!await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection)) {
+					return
+				};
 			}
 		}
 
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
 	}
 
-	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection) {
+	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection): Promise<boolean> {
 		let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
 		
 		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
-		if (result.length > 0 && !result[0].hasOwnProperty('children'))	{
-			return;
+		if (result.length > 0 && !result[0].hasOwnProperty('children')) {
+			return false;
 		}
 
-		let enclosingSymbol = findEnclosingSymbol(result, selection.active);
-		if (enclosingSymbol) {
-			editor.selection = new vscode.Selection(enclosingSymbol.range.start, enclosingSymbol.range.end);
+		let enclosingSymbols = findEnclosingSymbol(result, selection.active);
+		if (enclosingSymbols && enclosingSymbols.length > 0) {
+			let pickedSymbol = await vscode.window.showQuickPick(
+				enclosingSymbols.reverse().map(symbol => ({ label: symbol.name })), { title: 'Select an Enclosing Symbol' });
+			if (pickedSymbol) {
+				let symbol = enclosingSymbols.find(symbol => symbol.name === pickedSymbol!.label);
+				if (symbol) {
+					editor.selection = new vscode.Selection(symbol.range.start, symbol.range.end);
+				}
+			} else {
+				return false;
+			}
+		} else {
+			let start = new vscode.Position(0, 0);
+			let end = new vscode.Position(editor.document.lineCount - 1, editor.document.lineAt(editor.document.lineCount - 1).text.length);
+			editor.selection = new vscode.Selection(start, end);
 		}
+		return true;
 	}
 
 	// debugging aid
