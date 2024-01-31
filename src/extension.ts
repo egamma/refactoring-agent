@@ -740,6 +740,10 @@ export function activate(context: vscode.ExtensionContext) {
 	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection): Promise<boolean> {
 		let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
 
+		if (!result) {
+			return false;
+		}
+		
 		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
 		if (result.length > 0 && !result[0].hasOwnProperty('children')) {
 			return false;
