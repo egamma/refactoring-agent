@@ -13,7 +13,6 @@ const SUB_COMMAND_UNDERSTANDABILITY = 'understandability';
 const SUB_COMMAND_IDIOMATIC = 'idiomatic';
 const SUB_COMMAND_SMELLS = 'smells';
 const SUB_COMMAND_ERROR_HANDLING = 'errorHandling';
-const SUB_COMMAND_SUGGEST_EXTRACT_METHOD = 'suggestExtractMethod';
 const SUB_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 const SUB_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
 
@@ -179,8 +178,6 @@ export function activate(context: vscode.ExtensionContext) {
 				return await suggestRefactoringsUnderstandability(request, token, progress);
 			case SUB_COMMAND_ERROR_HANDLING:
 				return await suggestRefactoringsErrorHandling(request, token, progress);
-			case SUB_COMMAND_SUGGEST_EXTRACT_METHOD:
-				return await suggestExtractMethod(request, token, progress);
 			case SUB_COMMAND_SUGGEST_NEXT:
 				if (!hasAssistantHistoryEntry) {
 					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
@@ -211,7 +208,6 @@ export function activate(context: vscode.ExtensionContext) {
 				{ name: SUB_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
 				{ name: SUB_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
 				{ name: SUB_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
-				{ name: SUB_COMMAND_SUGGEST_EXTRACT_METHOD, description: 'Suggest an extract method/function refactoring' },
 				{ name: SUB_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
 				{ name: SUB_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
 			];
@@ -543,40 +539,6 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestExtractMethod(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
-		let editor = vscode.window.activeTextEditor!;
-
-		const access = await vscode.chat.requestChatAccess('copilot');
-
-		let code = getSelectedText(editor);
-
-		const messages = [
-			{
-				role: vscode.ChatMessageRole.System,
-				content:
-					`You are a world class expert in how to use refactorings to improve the quality of code.\n` +
-					`Make suggestions for restructuring existing code, altering its internal structure without changing its external behavior.` +
-					`You are well familiar with the 'Once and Only Once principle' that states that any given behavior within the code is defined Once and Only Once.\n` +
-					`Explain the extract method suggestion in detail and explain why it improve the code.\n` +
-					`When you suggest an extract method refactoring answer with 'Extract Code>' followed by the code range in the editor that should be extracted. \n` +
-					`Use the following format for the selection: selectionLineStart, selectionColumnStart, selectionLineEnd, selectionColumnEnd\n` +
-					`For example: Extract Code> 1, 1, 2, 1\n` +
-					`This means to extract the code from line 1, column 1 to line 2, column 1.\n` +
-					`Additional Rules\n` +
-					`Think step by step:\n` +
-					FORMAT_RESTRICTIONS
-			},
-			{
-				role: vscode.ChatMessageRole.User,
-				content:
-					`${request.prompt}\n` +
-					`Suggest extract method refactorings to reduce code duplication for the following code:\n` +
-					`${code}`
-			},
-		];
-		return makeRequest(access, messages, token, progress, code, editor);
-	}
-
 	context.subscriptions.push(
 		agent,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
@@ -743,7 +705,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (!result) {
 			return false;
 		}
-		
+
 		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
 		if (result.length > 0 && !result[0].hasOwnProperty('children')) {
 			return false;
