@@ -157,9 +157,11 @@ export function activate(context: vscode.ExtensionContext) {
 			return NO_REFACTORING_RESULT;
 		}
 
-		if (vscode.window.activeTextEditor.selection.isEmpty) {
-			stream.markdown('No selection found, please select the code that should be refactored.');
-			return NO_REFACTORING_RESULT;
+		const selection = vscode.window.activeTextEditor.selection;
+		if (selection.isEmpty) {
+			if (!await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection)) {
+				return NO_REFACTORING_RESULT;
+			};
 		}
 
 		const hasRefactoringRequest = context.history.some(entry => entry.request.agentId === 'refactoring');
