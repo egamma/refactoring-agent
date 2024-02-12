@@ -6,16 +6,18 @@ const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
 const NEXT_REFACTORING = 'refactoring.next';
 
-// sub commands
-const SUB_COMMAND_DUPLICATION = 'duplication';
-const SUB_COMMAND_PERFORMANCE = 'performance';
-const SUB_COMMAND_UNDERSTANDABILITY = 'understandability';
-const SUB_COMMAND_IDIOMATIC = 'idiomatic';
-const SUB_COMMAND_SMELLS = 'smells';
-const SUB_COMMAND_ERROR_HANDLING = 'errorHandling';
-const SUB_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
-const SUB_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
+// chat commands
+const CHAT_COMMAND_DUPLICATION = 'duplication';
+const CHAT_COMMAND_PERFORMANCE = 'performance';
+const CHAT_COMMAND_UNDERSTANDABILITY = 'understandability';
+const CHAT_COMMAND_IDIOMATIC = 'idiomatic';
+const CHAT_COMMAND_SMELLS = 'smells';
+const CHAT_COMMAND_ERROR_HANDLING = 'errorHandling';
+const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
+const CHAT_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
 
+// Language model
+const LANGUAGE_MODEL_ID = 'copilot-gpt-4';
 
 // prompts
 const BASIC_SYSTEM_MESSAGE =
@@ -63,10 +65,6 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 	suggestedRefactoring: '',
 	refactoringTarget: ''
 };
-
-function isRefactoringResult(result: vscode.ChatAgentResult2): result is IRefactoringResult {
-	return 'suggestedRefactoring' in result && result.suggestedRefactoring !== '';
-}
 
 class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
 	private originalContent: string = '';
@@ -152,46 +150,46 @@ export function activate(context: vscode.ExtensionContext) {
 		return undefined;
 	}
 
-	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
+	const handler: vscode.ChatAgentHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
 
 		if (!vscode.window.activeTextEditor) {
-			progress.report({ content: `There is no active editor, open an editor and try again.` });
+			stream.markdown(`There is no active editor, open an editor and try again.`);
 			return NO_REFACTORING_RESULT;
 		}
 
 		if (vscode.window.activeTextEditor.selection.isEmpty) {
-			progress.report({ content: 'No selection found, please select the code that should be refactored.' });
+			stream.markdown('No selection found, please select the code that should be refactored.');
 			return NO_REFACTORING_RESULT;
 		}
 
-		const hasAssistantHistoryEntry = context.history.some(entry => isRefactoringResult(entry.result));
-		switch (request.subCommand) {
-			case SUB_COMMAND_DUPLICATION:
-				return await suggestRefactoringsDuplication(request, token, progress);
-			case SUB_COMMAND_SMELLS:
-				return await suggestRefactoringsSmells(request, token, progress);
-			case SUB_COMMAND_PERFORMANCE:
-				return await suggestRefactoringsPerformance(request, token, progress);
-			case SUB_COMMAND_IDIOMATIC:
-				return await suggestRefactoringsIdiomatic(request, token, progress);
-			case SUB_COMMAND_UNDERSTANDABILITY:
-				return await suggestRefactoringsUnderstandability(request, token, progress);
-			case SUB_COMMAND_ERROR_HANDLING:
-				return await suggestRefactoringsErrorHandling(request, token, progress);
-			case SUB_COMMAND_SUGGEST_NEXT:
-				if (!hasAssistantHistoryEntry) {
-					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
+		const hasRefactoringRequest = context.history.some(entry => entry.request.agentId === 'refactoring');
+		switch (request.command) {
+			case CHAT_COMMAND_DUPLICATION:
+				return await suggestRefactoringsDuplication(request, token, stream);
+			case CHAT_COMMAND_SMELLS:
+				return await suggestRefactoringsSmells(request, token, stream);
+			case CHAT_COMMAND_PERFORMANCE:
+				return await suggestRefactoringsPerformance(request, token, stream);
+			case CHAT_COMMAND_IDIOMATIC:
+				return await suggestRefactoringsIdiomatic(request, token, stream);
+			case CHAT_COMMAND_UNDERSTANDABILITY:
+				return await suggestRefactoringsUnderstandability(request, token, stream);
+			case CHAT_COMMAND_ERROR_HANDLING:
+				return await suggestRefactoringsErrorHandling(request, token, stream);
+			case CHAT_COMMAND_SUGGEST_NEXT:
+				if (!hasRefactoringRequest) {
+					stream.markdown(`The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring`);
 					return NO_REFACTORING_RESULT;
 				}
-				return await suggestNextRefactoring(request, token, progress);
-			case SUB_COMMAND_SUGGEST_ANOTHER:
-				if (!hasAssistantHistoryEntry) {
-					progress.report({ content: `The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring` });
+				return await suggestNextRefactoring(request, token, stream);
+			case CHAT_COMMAND_SUGGEST_ANOTHER:
+				if (!hasRefactoringRequest) {
+					stream.markdown(`The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring`);
 					return NO_REFACTORING_RESULT;
 				}
-				return await suggestAnotherRefactoring(request, token, progress);
+				return await suggestAnotherRefactoring(request, token, stream);
 			default:
-				return await suggestRefactorings(request, token, progress);
+				return await suggestRefactorings(request, token, stream);
 		}
 	};
 
@@ -199,56 +197,53 @@ export function activate(context: vscode.ExtensionContext) {
 	agent.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 	agent.description = vscode.l10n.t('Suggest refactorings');
 	agent.fullName = vscode.l10n.t('Suggest Refactorings');
-	agent.subCommandProvider = {
-		provideSubCommands(token) {
+	agent.commandProvider = {
+		provideCommands(token) {
 			return [
-				{ name: SUB_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
-				{ name: SUB_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
-				{ name: SUB_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
-				{ name: SUB_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
-				{ name: SUB_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
-				{ name: SUB_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
-				{ name: SUB_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
-				{ name: SUB_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
+				{ name: CHAT_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
+				{ name: CHAT_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
+				{ name: CHAT_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
+				{ name: CHAT_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
+				{ name: CHAT_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
+				{ name: CHAT_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
+				{ name: CHAT_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
+				{ name: CHAT_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
 			];
 		}
 	};
 
-	agent.followupProvider = {
-		provideFollowups(result: IRefactoringResult, token: vscode.CancellationToken) {
-			if (result.suggestedRefactoring.length > 0) {
-				return [{
-					commandId: PREVIEW_REFACTORING,
-					args: [result],
-					message: 'Show Diff & Apply',
-					title: vscode.l10n.t('Show Diff & Apply'),
-				},
-				{
-					commandId: NEXT_REFACTORING,
-					args: [result],
-					message: 'Suggest Next',
-					title: vscode.l10n.t('$(thumbsup) Suggest Next'),
-				},
-				{
-					commandId: ANOTHER_REFACTORING,
-					args: [result],
-					message: 'Suggest Another',
-					title: vscode.l10n.t('$(thumbsdown) Suggest Another'),
-				}];
-			}
-		}
-	};
-
-	async function makeRequest(access: vscode.ChatAccess, messages: { role: vscode.ChatMessageRole; content: string; }[], token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>, code: string, editor: vscode.TextEditor) {
+	async function makeRequest(access: vscode.LanguageModelAccess, messages: { role: vscode.ChatMessageRole; content: string; }[], token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
-		const chatRequest = access.makeRequest(messages, {}, token);
+		const chatRequest = access.makeChatRequest(messages, {}, token);
 		let suggestedRefactoring = '';
 
-		for await (const fragment of chatRequest.response) {
+		for await (const fragment of chatRequest.stream) {
 			suggestedRefactoring += fragment;
-			progress.report({ content: fragment });
+			stream.markdown(fragment);
 		}
 
+		if (suggestedRefactoring.length > 0) {
+			stream.button({
+				command: PREVIEW_REFACTORING,
+				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
+				title: vscode.l10n.t('Show Diff & Apply')
+			});
+			stream.button({
+				command: NEXT_REFACTORING,
+				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
+				title: vscode.l10n.t('$(thumbsup) Suggest Next')
+			});
+			stream.button({
+				command: ANOTHER_REFACTORING,
+				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
+				title: vscode.l10n.t('$(thumbsdown) Suggest Another')
+			});
+		}
+
+		return createRefactoringResult(suggestedRefactoring, code, editor);
+	}
+
+	function createRefactoringResult(suggestedRefactoring: string, code: string, editor: vscode.TextEditor): IRefactoringResult {
 		return {
 			suggestedRefactoring: suggestedRefactoring,
 			originalCode: code,
@@ -256,9 +251,10 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
-		const access = await vscode.chat.requestChatAccess('copilot');
+
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -285,10 +281,10 @@ export function activate(context: vscode.ExtensionContext) {
 			},
 		];
 
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestNextRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestNextRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		const suggestionTopics = [
 			`Suggest a refactoring that eliminates code duplication.\n`,
 			`Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n`,
@@ -300,7 +296,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const randomSuggestion = suggestionTopics[randomIndex];
 
 		let editor = vscode.window.activeTextEditor!;
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -324,12 +320,12 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestAnotherRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestAnotherRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -360,13 +356,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -387,13 +383,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -414,13 +410,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -441,13 +437,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -469,13 +465,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -497,13 +493,13 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsErrorHandling(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, progress: vscode.Progress<vscode.ChatAgentProgress>): Promise<IRefactoringResult> {
+	async function suggestRefactoringsErrorHandling(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.chat.requestChatAccess('copilot');
+		const access = await vscode.chat.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
@@ -524,7 +520,7 @@ export function activate(context: vscode.ExtensionContext) {
 					`${code}`
 			},
 		];
-		return makeRequest(access, messages, token, progress, code, editor);
+		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
 	function getRefactoringTarget(editor: vscode.TextEditor): IRefactoringTarget {
@@ -643,12 +639,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		await restoreOriginalContents(arg);
 
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SUB_COMMAND_SUGGEST_ANOTHER}` });
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${CHAT_COMMAND_SUGGEST_ANOTHER}` });
 	}
 
 	async function suggestNextRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${SUB_COMMAND_SUGGEST_NEXT}` });
+		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${CHAT_COMMAND_SUGGEST_NEXT}` });
 	}
 
 	async function restoreOriginalContents(arg: IRefactoringResult) {
