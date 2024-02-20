@@ -45,7 +45,7 @@ const FORMAT_RESTRICTIONS =
 	`3. Avoid wrapping the whole response in triple backticks.\n` +
 	`4. In the Markdown code blocks use the same indentation as in the original code.\n`;
 
-interface IRefactoringResult extends vscode.ChatAgentResult2 {
+interface IRefactoringResult extends vscode.ChatResult {
 	originalCode: string;
 	suggestedRefactoring: string;
 	refactoringTarget: string; // a JSON stringified IRefactoringTarget
@@ -150,7 +150,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return undefined;
 	}
 
-	const handler: vscode.ChatAgentRequestHandler = async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
+	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
 
 		if (!vscode.window.activeTextEditor) {
 			stream.markdown(`There is no active editor, open an editor and try again.`);
@@ -164,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
-		const hasRefactoringRequest = context.history.some(entry => entry.agent.agent  === 'refactoring');
+		const hasRefactoringRequest = context.history.some(entry => entry.participant.participant  === 'refactoring');
 		switch (request.command) {
 			case CHAT_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, stream);
@@ -195,7 +195,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	const agent = vscode.chat.createChatAgent('refactoring', handler);
+	const agent = vscode.chat.createChatParticipant('refactoring', handler);
 	agent.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 	agent.description = vscode.l10n.t('Suggest refactorings');
 	agent.fullName = vscode.l10n.t('Suggest Refactorings');
@@ -214,7 +214,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	async function makeRequest(access: vscode.LanguageModelAccess, messages: vscode.LanguageModelMessage[], token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream, code: string, editor: vscode.TextEditor) {
+	async function makeRequest(access: vscode.LanguageModelAccess, messages: vscode.LanguageModelMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
 		const chatRequest = access.makeChatRequest(messages, {}, token);
 		let suggestedRefactoring = '';
@@ -253,7 +253,7 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactorings(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactorings(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -282,7 +282,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestNextRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestNextRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		const suggestionTopics = [
 			`Suggest a refactoring that eliminates code duplication.\n`,
 			`Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n`,
@@ -315,7 +315,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestAnotherRefactoring(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestAnotherRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
@@ -344,7 +344,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsDuplication(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsDuplication(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -367,7 +367,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsSmells(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsSmells(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -390,7 +390,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsPerformance(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsPerformance(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -413,7 +413,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsIdiomatic(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsIdiomatic(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -437,7 +437,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsUnderstandability(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsUnderstandability(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
@@ -461,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(access, messages, token, stream, code, editor);
 	}
 
-	async function suggestRefactoringsErrorHandling(request: vscode.ChatAgentRequest, token: vscode.CancellationToken, stream: vscode.ChatAgentResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactoringsErrorHandling(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
