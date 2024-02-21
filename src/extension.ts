@@ -199,6 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
 	agent.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 	agent.description = vscode.l10n.t('Suggest refactorings');
 	agent.fullName = vscode.l10n.t('Suggest Refactorings');
+	agent.isSticky = true;
 	agent.commandProvider = {
 		provideCommands(token) {
 			return [
