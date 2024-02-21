@@ -180,13 +180,13 @@ export function activate(context: vscode.ExtensionContext) {
 				return await suggestRefactoringsErrorHandling(request, token, stream);
 			case CHAT_COMMAND_SUGGEST_NEXT:
 				if (!hasRefactoringRequest) {
-					stream.markdown(`The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring`);
+					stream.markdown(`No refactorings have been suggested, yet. Please use the refactoring participant to suggest a refactoring`);
 					return NO_REFACTORING_RESULT;
 				}
 				return await suggestNextRefactoring(request, token, stream);
 			case CHAT_COMMAND_SUGGEST_ANOTHER:
 				if (!hasRefactoringRequest) {
-					stream.markdown(`The agent has not made any refactoring suggestions, yet. Please use the agent to suggest a refactoring`);
+					stream.markdown(`No refactorings have been suggested, yet. Please use the refactoring participant to suggest a refactoring`);
 					return NO_REFACTORING_RESULT;
 				}
 				return await suggestAnotherRefactoring(request, token, stream);
@@ -195,12 +195,12 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	const agent = vscode.chat.createChatParticipant('refactoring', handler);
-	agent.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
-	agent.description = vscode.l10n.t('Suggest refactorings');
-	agent.fullName = vscode.l10n.t('Suggest Refactorings');
-	agent.isSticky = true;
-	agent.commandProvider = {
+	const refactoringChatParticipant = vscode.chat.createChatParticipant('refactoring', handler);
+	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
+	refactoringChatParticipant.description = vscode.l10n.t('Suggest refactorings');
+	refactoringChatParticipant.fullName = vscode.l10n.t('Suggest Refactorings');
+	refactoringChatParticipant.isSticky = true;
+	refactoringChatParticipant.commandProvider = {
 		provideCommands(token) {
 			return [
 				{ name: CHAT_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
@@ -498,12 +498,12 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	context.subscriptions.push(
-		agent,
+		refactoringChatParticipant,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
 		vscode.commands.registerCommand(NEXT_REFACTORING, suggestNextRefactoringCommand),
 		vscode.commands.registerCommand(ANOTHER_REFACTORING, suggestAnotherRefactoringCommand),
-		vscode.commands.registerCommand('refactoring-agent.apply-refactoring', applyRefactoring),
-		vscode.commands.registerCommand('refactoring-agent.suggestRefactoring', suggestRefactoringAction),
+		vscode.commands.registerCommand('refactoring-participant.apply-refactoring', applyRefactoring),
+		vscode.commands.registerCommand('refactoring-participant.suggestRefactoring', suggestRefactoringAction),
 		vscode.workspace.registerTextDocumentContentProvider('refactoring-preview', previewContentProvider)
 	);
 

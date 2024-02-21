@@ -1,8 +1,8 @@
 {
-    "name": "refactoring-agent",
+    "name": "refactoring-participant",
     "publisher": "vscode-samples",
-    "displayName": "Refactoring Agent",
-    "description": "An agent for suggesting refactorings for the current selection.",
+    "displayName": "Refactoring Participant",
+    "description": "An participant for suggesting refactorings for the current selection.",
 
     "version": "0.1.0",
     "engines": {
@@ -26,28 +26,28 @@
     "contributes": {
         "commands": [
             {
-                "command": "refactoring-agent.apply-refactoring",
+                "command": "refactoring-participant.apply-refactoring",
                 "title": "Apply Refactoring",
-                "category": "Refactoring Agent",
+                "category": "Refactoring Participant",
                 "icon": "$(check)"
             },
             {
-                "command": "refactoring-agent.suggestRefactoring",
+                "command": "refactoring-participant.suggestRefactoring",
                 "title": "Suggest Refactoring",
-                "category": "Refactoring Agent"
+                "category": "Refactoring Participant"
             }
         ],
         "menus": {
             "editor/title": [
                 {
-                    "command": "refactoring-agent.apply-refactoring",
+                    "command": "refactoring-participant.apply-refactoring",
                     "group": "navigation",
                     "when": "resourceScheme == 'refactoring-preview'"
                 }
             ],
 			"copilot": [
 				{
-					"command": "refactoring-agent.suggestRefactoring",
+					"command": "refactoring-participant.suggestRefactoring",
 					"when": "!github.copilot.interactiveSession.disabled && !editorReadonly",
 					"group": "copilotAction@20"
 				}

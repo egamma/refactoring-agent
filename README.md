@@ -1,4 +1,4 @@
-# Refactoring Agent
+# Refactoring Participant
 
 A Co-Pilot extension that contributes a refactoring support. It contributes a 'Suggest Refactoring' command that makes refactoring suggestions for the current selection.
 
