@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+import * as symbolIcons from './symbolIcons';
+
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
@@ -672,7 +674,8 @@ export function activate(context: vscode.ExtensionContext) {
 		let initialSelection = editor.selection;
 		let enclosingSymbols = findEnclosingSymbol(result, selection.active);
 		if (enclosingSymbols && enclosingSymbols.length > 0) {
-			let quickPickItems = enclosingSymbols.reverse().map(symbol => ({ label: symbol.name, symbol }));
+
+			let quickPickItems = enclosingSymbols.reverse().map(symbol => ({ label: `${symbolIcons.symbolKindToCodicon(symbol.kind)} ${symbol.name}`, symbol }));
 			let pickedItem = await vscode.window.showQuickPick(quickPickItems, {
 				title: 'Select an Enclosing Range',
 				onDidSelectItem(item) {
