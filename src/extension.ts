@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
-		const hasRefactoringRequest = context.history.some(entry => entry.participant.participant  === 'refactoring');
+		const hasRefactoringRequest = context.history.some(entry => entry.participant.name  === 'refactoring');
 		switch (request.command) {
 			case CHAT_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, stream);
@@ -200,7 +200,6 @@ export function activate(context: vscode.ExtensionContext) {
 	const refactoringChatParticipant = vscode.chat.createChatParticipant('refactoring', handler);
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 	refactoringChatParticipant.description = vscode.l10n.t('Suggest refactorings');
-	refactoringChatParticipant.fullName = vscode.l10n.t('Suggest Refactorings');
 	refactoringChatParticipant.isSticky = true;
 	refactoringChatParticipant.commandProvider = {
 		provideCommands(token) {
