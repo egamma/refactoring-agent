@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-import * as symbolIcons from './symbolIcons';
+import * as scopePicker from './scopePicker';
 
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
@@ -138,20 +138,6 @@ export function activate(context: vscode.ExtensionContext) {
 		return lines.join('\n');
 	}
 
-	function findEnclosingSymbol(rootSymbols: vscode.DocumentSymbol[], position: vscode.Position): vscode.DocumentSymbol[] | undefined {
-		for (const symbol of rootSymbols) {
-			if (symbol.range.contains(position)) {
-				const enclosingChild = findEnclosingSymbol(symbol.children, position);
-				if (enclosingChild) {
-					return [symbol, ...enclosingChild];
-				} else {
-					return [symbol];
-				}
-			}
-		}
-		return undefined;
-	}
-
 	const handler: vscode.ChatRequestHandler = async (request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<IRefactoringResult> => {
 
 		if (!vscode.window.activeTextEditor) {
@@ -161,7 +147,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const selection = vscode.window.activeTextEditor.selection;
 		if (selection.isEmpty) {
-			if (!await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection)) {
+			if (!await scopePicker.selectRange(vscode.window.activeTextEditor, selection)) {
 				return NO_REFACTORING_RESULT;
 			};
 		}
@@ -649,55 +635,13 @@ export function activate(context: vscode.ExtensionContext) {
 		if (vscode.window.activeTextEditor) {
 			let selection = vscode.window.activeTextEditor.selection;
 			if (selection.isEmpty) {
-				if (!await selectEnclosingSymbolRange(vscode.window.activeTextEditor, selection)) {
+				if (!await scopePicker.selectRange(vscode.window.activeTextEditor, selection)) {
 					return;
 				};
 			}
 		}
 
 		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
-	}
-
-	async function selectEnclosingSymbolRange(editor: vscode.TextEditor, selection: vscode.Selection): Promise<boolean> {
-		let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
-
-		if (!result) {
-			return false;
-		}
-
-		// check that the returned result is a DocumentSymbol[] and not a SymbolInformation[]
-		if (result.length > 0 && !result[0].hasOwnProperty('children')) {
-			return false;
-		}
-
-		let initialSelection = editor.selection;
-		let enclosingSymbols = findEnclosingSymbol(result, selection.active);
-		if (enclosingSymbols && enclosingSymbols.length > 0) {
-
-			let quickPickItems = enclosingSymbols.reverse().map(symbol => ({ label: `${symbolIcons.symbolKindToCodicon(symbol.kind)} ${symbol.name}`, symbol }));
-			let pickedItem = await vscode.window.showQuickPick(quickPickItems, {
-				title: 'Select an Enclosing Range',
-				onDidSelectItem(item) {
-					let symbol = (item as any).symbol;
-					if (symbol) {
-						editor.selection = new vscode.Selection(symbol.range.start, symbol.range.end);
-					}
-				},
-			});
-			if (!pickedItem) {
-				editor.selection = initialSelection;
-				return false;
-			}
-		} else {
-			selectAll(editor);
-		}
-		return true;
-	}
-
-	function selectAll(editor: vscode.TextEditor) {
-		let start = new vscode.Position(0, 0);
-		let end = new vscode.Position(editor.document.lineCount - 1, editor.document.lineAt(editor.document.lineCount - 1).text.length);
-		editor.selection = new vscode.Selection(start, end);
 	}
 
 	// debugging aid
