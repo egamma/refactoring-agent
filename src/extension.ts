@@ -202,9 +202,9 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	async function makeRequest(access: vscode.LanguageModelAccess, messages: vscode.LanguageModelMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
+	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
-		const chatRequest = access.makeChatRequest(messages, {}, token);
+		const chatRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, messages, {}, token);
 		let suggestedRefactoring = '';
 
 		for await (const fragment of chatRequest.stream) {
@@ -244,12 +244,10 @@ export function activate(context: vscode.ExtensionContext) {
 	async function suggestRefactorings(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`\n` +
@@ -260,14 +258,14 @@ export function activate(context: vscode.ExtensionContext) {
 				`- improve the error handling.\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code:\n` +
 				`${code}`
 			),
 		];
 
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestNextRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
@@ -282,11 +280,10 @@ export function activate(context: vscode.ExtensionContext) {
 		const randomSuggestion = suggestionTopics[randomIndex];
 
 		let editor = vscode.window.activeTextEditor!;
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 
 		let code = getSelectedText(editor);
 
-		const messages = [new vscode.LanguageModelSystemMessage(
+		const messages = [new vscode.LanguageModelChatSystemMessage(
 			BASIC_SYSTEM_MESSAGE +
 			`The user has applied the previous refactoring suggestion, please make another suggestion.\n` +
 			`The language used in the selected code is ${getLanguage(editor)}\n` +
@@ -294,19 +291,17 @@ export function activate(context: vscode.ExtensionContext) {
 			`${randomSuggestion}\n` +
 			`\n` +
 			FORMAT_RESTRICTIONS
-		), new vscode.LanguageModelUserMessage(
+		), new vscode.LanguageModelChatUserMessage(
 			`${request.prompt}\n` +
 			`Suggest refactorings for the following code:\n` +
 			`${code}`
 		)];
 
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestAnotherRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		let diagnostics = '';
@@ -317,159 +312,147 @@ export function activate(context: vscode.ExtensionContext) {
 		capturedDiagnostics = '';
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(BASIC_SYSTEM_MESSAGE +
+			new vscode.LanguageModelChatSystemMessage(BASIC_SYSTEM_MESSAGE +
 				`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 				`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS),
-			new vscode.LanguageModelUserMessage(`${diagnostics}\n` +
+			new vscode.LanguageModelChatUserMessage(`${diagnostics}\n` +
 					`\n` +
 					`Please suggest another and differerent refactoring than the previous one for the following code:\n` +
 					`${request.prompt}\n` +
 					`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsDuplication(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`Suggest refactorings that eliminate code duplication.\n` +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsSmells(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that eliminate code smells.\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that reduce code smells:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsPerformance(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that make the code more performant.\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that improve the performance:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsIdiomatic(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that make the code follow the language's idioms and naming patterns:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsUnderstandability(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`Suggest refactorings that make the code easier to understand and maintain.\n` +
 				`Suggest rename refactorings of variable names when it improves the readability.\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that make the code easier to understand:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	async function suggestRefactoringsErrorHandling(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
-		const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelSystemMessage(
+			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`1. Suggest refactorings that improve the error handling and make the code more robust and maintainable.\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelUserMessage(
+			new vscode.LanguageModelChatUserMessage(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that improve the error handling:\n` +
 				`${code}`
 			),
 		];
-		return makeRequest(access, messages, token, stream, code, editor);
+		return makeRequest(messages, token, stream, code, editor);
 	}
 
 	function getRefactoringTarget(editor: vscode.TextEditor): IRefactoringTarget {
