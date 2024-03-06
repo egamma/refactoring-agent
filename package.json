@@ -3,7 +3,6 @@
     "publisher": "vscode-samples",
     "displayName": "Refactoring Participant",
     "description": "An participant for suggesting refactorings for the current selection.",
-
     "version": "0.1.0",
     "engines": {
         "vscode": "^1.86.0"
@@ -24,6 +23,50 @@
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "chatParticipants": [
+            {
+                "name": "refactoring",
+                "description": "Suggest refactorings",
+                "commands": [
+                    {
+                        "name": "",
+                        "description": ""
+                    },
+                    {
+                        "name": "performance",
+                        "description": "Suggest refacorings to improve performance"
+                    },
+                    {
+                        "name": "duplication",
+                        "description": "Suggest refacorings to remove code duplication"
+                    },
+                    {
+                        "name": "understandability",
+                        "description": "Suggest refacorings to improve understandability"
+                    },
+                    {
+                        "name": "idiomatic",
+                        "description": "Suggest refacorings to make the code more idiomatic"
+                    },
+                    {
+                        "name": "smells",
+                        "description": "Suggest refacorings to remove code smells"
+                    },
+                    {
+                        "name": "errorHandling",
+                        "description": "Suggest refacorings to improve error handling"
+                    },
+                    {
+                        "name": "suggestAnotherRefactoring",
+                        "description": "Suggest another refactoring"
+                    },
+                    {
+                        "name": "suggestNextRefactoring",
+                        "description": "Suggest next refactoring"
+                    }
+                ]
+            }
+        ],
         "commands": [
             {
                 "command": "refactoring-participant.apply-refactoring",
@@ -45,13 +88,13 @@
                     "when": "resourceScheme == 'refactoring-preview'"
                 }
             ],
-			"copilot": [
-				{
-					"command": "refactoring-participant.suggestRefactoring",
-					"when": "!github.copilot.interactiveSession.disabled && !editorReadonly",
-					"group": "copilotAction@20"
-				}
-			]
+            "copilot": [
+                {
+                    "command": "refactoring-participant.suggestRefactoring",
+                    "when": "!github.copilot.interactiveSession.disabled && !editorReadonly",
+                    "group": "copilotAction@20"
+                }
+            ]
         }
     },
     "scripts": {
