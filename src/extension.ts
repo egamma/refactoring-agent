@@ -185,22 +185,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const refactoringChatParticipant = vscode.chat.createChatParticipant('refactoring', handler);
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
-	refactoringChatParticipant.description = vscode.l10n.t('Suggest refactorings');
 	refactoringChatParticipant.isSticky = true;
-	refactoringChatParticipant.commandProvider = {
-		provideCommands(token) {
-			return [
-				{ name: CHAT_COMMAND_PERFORMANCE, description: 'Suggest refacorings to improve performance' },
-				{ name: CHAT_COMMAND_DUPLICATION, description: 'Suggest refacorings to remove code duplication' },
-				{ name: CHAT_COMMAND_UNDERSTANDABILITY, description: 'Suggest refacorings to improve understandability' },
-				{ name: CHAT_COMMAND_IDIOMATIC, description: 'Suggest refacorings to make the code more idiomatic' },
-				{ name: CHAT_COMMAND_SMELLS, description: 'Suggest refacorings to remove code smells' },
-				{ name: CHAT_COMMAND_ERROR_HANDLING, description: 'Suggest refacorings to improve error handling' },
-				{ name: CHAT_COMMAND_SUGGEST_ANOTHER, description: 'Suggest another refactoring' },
-				{ name: CHAT_COMMAND_SUGGEST_NEXT, description: 'Suggest next refactoring' }
-			];
-		}
-	};
 
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
@@ -571,12 +556,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		await restoreOriginalContents(arg);
 
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${CHAT_COMMAND_SUGGEST_ANOTHER}` });
+		await vscode.commands.executeCommand('workbench.action.chat.open', `@refactoring /${CHAT_COMMAND_SUGGEST_ANOTHER}`);
 	}
 
 	async function suggestNextRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: `@refactoring /${CHAT_COMMAND_SUGGEST_NEXT}` });
+		await vscode.commands.executeCommand('workbench.action.chat.open', `@refactoring /${CHAT_COMMAND_SUGGEST_NEXT}`);
 	}
 
 	async function restoreOriginalContents(arg: IRefactoringResult) {
@@ -624,7 +609,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		vscode.interactive.sendInteractiveRequestToProvider('copilot', { message: '@refactoring' });
+		await vscode.commands.executeCommand('workbench.action.chat.open', '@refactoring');
 	}
 
 	// debugging aid
