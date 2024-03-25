@@ -152,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
-		const hasRefactoringRequest = context.history.some(entry => entry.participant.name  === 'refactoring');
+		const hasRefactoringRequest = context.history.some(entry => entry.participant  === 'refactoring');
 		switch (request.command) {
 			case CHAT_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, stream);
@@ -185,7 +185,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const refactoringChatParticipant = vscode.chat.createChatParticipant('refactoring', handler);
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
-	refactoringChatParticipant.isSticky = true;
 
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
