@@ -469,6 +469,14 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		let uri = activeTextEditor.document.uri;
+		// use the active tab which is a diff editor to get at the editor input URL
+		// this is more robust than using the active editor only
+		let tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+		if (tab) {
+			if (tab.input instanceof vscode.TabInputTextDiff) {
+				uri = tab.input.modified;
+			}
+		}
 		let query = uri.query;
 		let params = new URLSearchParams(query);
 		let annotationString = params.get('refactoringTarget');
@@ -476,6 +484,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(`The currently active editor does not suggest a refactoring to apply.`);
 			return;
 		}
+
 
 		let decodedString = decodeURIComponent(annotationString!);
 		let annotation: IRefactoringTarget = JSON.parse(decodedString!);

@@ -28,6 +28,7 @@
                 "id": "refactoring",
                 "name": "refactoring",
                 "description": "Suggest refactorings",
+                "isSticky": true,
                 "commands": [
                     {
                         "name": "",

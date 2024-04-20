@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { SymbolKind } from "vscode";
+import { CopilotExtensionApi } from './api';
 
 export async function selectRange(editor: vscode.TextEditor, selection: vscode.Selection): Promise<boolean> {
     let result: vscode.DocumentSymbol[] = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', editor.document.uri);
@@ -35,6 +36,22 @@ export async function selectRange(editor: vscode.TextEditor, selection: vscode.S
         selectAll(editor);
     }
     return true;
+}
+
+// Currently does not work, extension cannot get at the API object
+async function selectScope(editor: vscode.TextEditor, options: { reason?: string } = {}): Promise<vscode.Selection | undefined> {
+    const extensionName = 'GitHub.copilot';
+    const extension = vscode.extensions.getExtension(extensionName);
+    if (!extension) {
+        return undefined;
+    }
+    if (!extension.isActive) {
+        await extension.activate();
+    }
+    let exports = extension.exports;
+    const copilotAPI = exports.getAPI(1) as CopilotExtensionApi;
+    let result = copilotAPI.selectScope(editor, { reason: 'Select a range' });
+    return result;
 }
 
 function findEnclosingSymbol(rootSymbols: vscode.DocumentSymbol[], position: vscode.Position): vscode.DocumentSymbol[] | undefined {
