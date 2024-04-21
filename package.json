@@ -25,7 +25,7 @@
     "contributes": {
         "chatParticipants": [
             {
-                "id": "refactoring",
+                "id": "refactoring-participant",
                 "name": "refactoring",
                 "description": "Suggest refactorings",
                 "isSticky": true,

@@ -3,6 +3,7 @@ import * as path from 'path';
 
 import * as scopePicker from './scopePicker';
 
+const REFACTORING_PARTICIPANT_ID = 'refactoring-participant';
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
@@ -145,9 +146,11 @@ export function activate(context: vscode.ExtensionContext) {
 			return NO_REFACTORING_RESULT;
 		}
 
+		//dumpHistory(context);
+
 		const selection = vscode.window.activeTextEditor.selection;
 		if (selection.isEmpty) {
-			if (!await scopePicker.selectRange(vscode.window.activeTextEditor, selection)) {
+			if (!await scopePicker.selectRange(vscode.window.activeTextEditor)) {
 				return NO_REFACTORING_RESULT;
 			};
 		}
@@ -183,8 +186,29 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	const refactoringChatParticipant = vscode.chat.createChatParticipant('refactoring', handler);
+	const refactoringChatParticipant = vscode.chat.createChatParticipant(REFACTORING_PARTICIPANT_ID, handler);
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
+
+	function dumpHistory(context: vscode.ChatContext) {
+		const history = context.history;
+
+		console.log("Chat History:");
+		let entryCount = 0;
+		for (const entry of history) {
+			if (entry instanceof vscode.ChatRequestTurn){
+				console.log(`Request ${entryCount++}: ${entry.prompt}`);
+				console.log(`-----`);
+			} if (entry instanceof vscode.ChatResponseTurn){
+				for (const responseEntry of entry.response) {
+					let responseCount = 0;
+					if (responseEntry instanceof vscode.ChatResponseMarkdownPart) {
+						console.log(`Response ${entryCount}-${responseCount++}: ${responseEntry.value.value}`);
+					}
+				}
+				console.log(`-----`);
+			}
+		}
+	}
 
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		// dumpPrompt(messages);
@@ -611,7 +635,7 @@ export function activate(context: vscode.ExtensionContext) {
 		if (vscode.window.activeTextEditor) {
 			let selection = vscode.window.activeTextEditor.selection;
 			if (selection.isEmpty) {
-				if (!await scopePicker.selectRange(vscode.window.activeTextEditor, selection)) {
+				if (!await scopePicker.selectRange(vscode.window.activeTextEditor)) {
 					return;
 				};
 			}
