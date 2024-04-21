@@ -61,10 +61,6 @@
                     {
                         "name": "suggestAnotherRefactoring",
                         "description": "Suggest another refactoring"
-                    },
-                    {
-                        "name": "suggestNextRefactoring",
-                        "description": "Suggest next refactoring"
                     }
                 ]
             }

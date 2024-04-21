@@ -4,10 +4,10 @@ import * as path from 'path';
 import * as scopePicker from './scopePicker';
 
 const REFACTORING_PARTICIPANT_ID = 'refactoring-participant';
+
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
-const NEXT_REFACTORING = 'refactoring.next';
 
 // chat commands
 const CHAT_COMMAND_DUPLICATION = 'duplication';
@@ -17,7 +17,6 @@ const CHAT_COMMAND_IDIOMATIC = 'idiomatic';
 const CHAT_COMMAND_SMELLS = 'smells';
 const CHAT_COMMAND_ERROR_HANDLING = 'errorHandling';
 const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
-const CHAT_COMMAND_SUGGEST_NEXT = 'suggestNextRefactoring';
 
 // Language model
 const LANGUAGE_MODEL_ID = 'copilot-gpt-4';
@@ -100,20 +99,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let previewContentProvider = new RefactoringPreviewContentProvider();
 
-	// The map stores the original contents of a document before a suggested refactoring is applied.
-	// It will be used to restore the original contents when the user request another suggestion.
-	let originalDocs = new Map<string, string>();
-
-	function saveOriginalDocument(documentPath: string, content: string) {
-		originalDocs.set(documentPath, content);
-	}
-
-	function getOriginalDocument(documentPath: string): string | undefined {
-		return originalDocs.get(documentPath);
-	}
-
-	let capturedDiagnostics: string = '';
-
 	function getSelectedText(editor: vscode.TextEditor): string {
 		const selection = editor.selection;
 		return editor.document.getText(selection.with({ start: selection.start.with({ character: 0 }), end: selection.end.with({ character: editor.document.lineAt(selection.end.line).text.length }) }));
@@ -155,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
-		const hasRefactoringRequest = context.history.some(entry => entry.participant  === 'refactoring');
+		const hasRefactoringRequest = context.history.some(entry => entry instanceof vscode.ChatResponseTurn);
 		switch (request.command) {
 			case CHAT_COMMAND_DUPLICATION:
 				return await suggestRefactoringsDuplication(request, token, stream);
@@ -169,18 +154,12 @@ export function activate(context: vscode.ExtensionContext) {
 				return await suggestRefactoringsUnderstandability(request, token, stream);
 			case CHAT_COMMAND_ERROR_HANDLING:
 				return await suggestRefactoringsErrorHandling(request, token, stream);
-			case CHAT_COMMAND_SUGGEST_NEXT:
-				if (!hasRefactoringRequest) {
-					stream.markdown(`No refactorings have been suggested, yet. Please use the refactoring participant to suggest a refactoring`);
-					return NO_REFACTORING_RESULT;
-				}
-				return await suggestNextRefactoring(request, token, stream);
 			case CHAT_COMMAND_SUGGEST_ANOTHER:
 				if (!hasRefactoringRequest) {
 					stream.markdown(`No refactorings have been suggested, yet. Please use the refactoring participant to suggest a refactoring`);
 					return NO_REFACTORING_RESULT;
 				}
-				return await suggestAnotherRefactoring(request, token, stream);
+				return await suggestAnotherRefactoring(request, context, token, stream);
 			default:
 				return await suggestRefactorings(request, token, stream);
 		}
@@ -189,29 +168,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const refactoringChatParticipant = vscode.chat.createChatParticipant(REFACTORING_PARTICIPANT_ID, handler);
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 
-	function dumpHistory(context: vscode.ChatContext) {
-		const history = context.history;
-
-		console.log("Chat History:");
-		let entryCount = 0;
-		for (const entry of history) {
-			if (entry instanceof vscode.ChatRequestTurn){
-				console.log(`Request ${entryCount++}: ${entry.prompt}`);
-				console.log(`-----`);
-			} if (entry instanceof vscode.ChatResponseTurn){
-				for (const responseEntry of entry.response) {
-					let responseCount = 0;
-					if (responseEntry instanceof vscode.ChatResponseMarkdownPart) {
-						console.log(`Response ${entryCount}-${responseCount++}: ${responseEntry.value.value}`);
-					}
-				}
-				console.log(`-----`);
-			}
-		}
-	}
-
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
-		// dumpPrompt(messages);
+		
+		stream.progress('Suggesting a refactoring...');
 		const chatRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, messages, {}, token);
 		let suggestedRefactoring = '';
 
@@ -220,21 +179,17 @@ export function activate(context: vscode.ExtensionContext) {
 			stream.markdown(fragment);
 		}
 
-		if (suggestedRefactoring.length > 0) {
+		let suggestion = extractLastMarkdownCodeBlock(suggestedRefactoring);
+		if (suggestion.length > 0) {
 			stream.button({
 				command: PREVIEW_REFACTORING,
 				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
 				title: vscode.l10n.t('Show Diff & Apply')
 			});
 			stream.button({
-				command: NEXT_REFACTORING,
-				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
-				title: vscode.l10n.t('$(thumbsup) Suggest Next')
-			});
-			stream.button({
 				command: ANOTHER_REFACTORING,
 				arguments: [createRefactoringResult(suggestedRefactoring, code, editor)],
-				title: vscode.l10n.t('$(thumbsdown) Suggest Another')
+				title: vscode.l10n.t('Suggest Another')
 			});
 		}
 
@@ -267,71 +222,40 @@ export function activate(context: vscode.ExtensionContext) {
 				FORMAT_RESTRICTIONS
 			),
 			new vscode.LanguageModelChatUserMessage(
-				`${request.prompt}\n` +
+				`This is the request from the user:\n` +
+				`${request.prompt}\n\n` +
 				`Suggest refactorings for the following code:\n` +
 				`${code}`
 			),
 		];
-
 		return makeRequest(messages, token, stream, code, editor);
 	}
 
-	async function suggestNextRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
-		const suggestionTopics = [
-			`Suggest a refactoring that eliminates code duplication.\n`,
-			`Suggest a rename refactoring for a variable name so that it improves the readability of the code.\n`,
-			`Suggest a refactoring that makes the code more efficient.\n`,
-			`Suggest a refactoring that improves the error handling.\n`,
-			`Suggest a refactoring that makes the code follow the language's idioms and naming patterns better.`
-		];
-		const randomIndex = Math.floor(Math.random() * suggestionTopics.length);
-		const randomSuggestion = suggestionTopics[randomIndex];
-
-		let editor = vscode.window.activeTextEditor!;
-
-		let code = getSelectedText(editor);
-
-		const messages = [new vscode.LanguageModelChatSystemMessage(
-			BASIC_SYSTEM_MESSAGE +
-			`The user has applied the previous refactoring suggestion, please make another suggestion.\n` +
-			`The language used in the selected code is ${getLanguage(editor)}\n` +
-			`\n` +
-			`${randomSuggestion}\n` +
-			`\n` +
-			FORMAT_RESTRICTIONS
-		), new vscode.LanguageModelChatUserMessage(
-			`${request.prompt}\n` +
-			`Suggest refactorings for the following code:\n` +
-			`${code}`
-		)];
-
-		return makeRequest(messages, token, stream, code, editor);
-	}
-
-	async function suggestAnotherRefactoring(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
+	async function suggestAnotherRefactoring(request: vscode.ChatRequest, context: vscode.ChatContext, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 		let code = getSelectedText(editor);
 
-		let diagnostics = '';
-		if (capturedDiagnostics.length) {
-			diagnostics = `The previous suggestion has added the following errors:\n` +
-				`${capturedDiagnostics}\n`;
-		}
-		capturedDiagnostics = '';
-
-		const messages = [
+		const messages = [];
+		messages.push(
 			new vscode.LanguageModelChatSystemMessage(BASIC_SYSTEM_MESSAGE +
 				`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 				`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
-				FORMAT_RESTRICTIONS),
-			new vscode.LanguageModelChatUserMessage(`${diagnostics}\n` +
-					`\n` +
-					`Please suggest another and differerent refactoring than the previous one for the following code:\n` +
-					`${request.prompt}\n` +
-					`${code}`
+				FORMAT_RESTRICTIONS)
+		);
+
+		addHistoryToMessages(context, messages);
+
+		messages.push(
+			new vscode.LanguageModelChatUserMessage(
+				`Please suggest another and differerent refactoring than the previous one for the following code.\n` +
+				`If you have no more suggestions, then just respond with "no more refactoring suggestions".\n` +
+				`This the request from the user:\n` +
+				`${request.prompt}\n` +
+				`This is the code to be refactored:\n` +
+				`${code}`
 			),
-		];
+		);
 		return makeRequest(messages, token, stream, code, editor);
 	}
 
@@ -463,6 +387,20 @@ export function activate(context: vscode.ExtensionContext) {
 		return makeRequest(messages, token, stream, code, editor);
 	}
 
+	function addHistoryToMessages(context: vscode.ChatContext, messages: vscode.LanguageModelChatMessage[]) {
+		const history = context.history;
+
+		for (const entry of history) {
+			if (entry instanceof vscode.ChatResponseTurn) {
+				for (const responseEntry of entry.response) {
+					if (responseEntry instanceof vscode.ChatResponseMarkdownPart) {
+						messages.push(new vscode.LanguageModelChatAssistantMessage(responseEntry.value.value));
+					}
+				}
+			}
+		}
+	}
+
 	function getRefactoringTarget(editor: vscode.TextEditor): IRefactoringTarget {
 		const selection = editor.selection;
 		return {
@@ -478,7 +416,6 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		refactoringChatParticipant,
 		vscode.commands.registerCommand(PREVIEW_REFACTORING, showPreview),
-		vscode.commands.registerCommand(NEXT_REFACTORING, suggestNextRefactoringCommand),
 		vscode.commands.registerCommand(ANOTHER_REFACTORING, suggestAnotherRefactoringCommand),
 		vscode.commands.registerCommand('refactoring-participant.apply-refactoring', applyRefactoring),
 		vscode.commands.registerCommand('refactoring-participant.suggestRefactoring', suggestRefactoringAction),
@@ -528,17 +465,6 @@ export function activate(context: vscode.ExtensionContext) {
 		let success = await editor.edit(editBuilder => {
 			editBuilder.replace(targetSelection, replacement!);
 		});
-		if (success) {
-			// store the original document content in the document store
-			try {
-				saveOriginalDocument(annotation.documentPath, originalContent);
-			} catch (error) {
-				vscode.window.showInformationMessage(`Failed to store the original document content in the document store.`);
-			}
-		} else {
-			vscode.window.showInformationMessage(`Failed to apply the suggested refactoring.`);
-		}
-
 	}
 
 	async function closeDiffEditorIfActive() {
@@ -585,53 +511,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 	async function suggestAnotherRefactoringCommand(arg: IRefactoringResult) {
 		closeDiffEditorIfActive();
-
-		await restoreOriginalContents(arg);
-
 		await vscode.commands.executeCommand('workbench.action.chat.open', `@refactoring /${CHAT_COMMAND_SUGGEST_ANOTHER}`);
 	}
 
-	async function suggestNextRefactoringCommand(arg: IRefactoringResult) {
-		closeDiffEditorIfActive();
-		await vscode.commands.executeCommand('workbench.action.chat.open', `@refactoring /${CHAT_COMMAND_SUGGEST_NEXT}`);
-	}
-
-	async function restoreOriginalContents(arg: IRefactoringResult) {
-		let target: IRefactoringTarget = JSON.parse(arg.refactoringTarget);
-		let targetDocumentUri = vscode.Uri.file(target.documentPath);
-		let doc = await vscode.workspace.openTextDocument(targetDocumentUri);
-		let originalContent = getOriginalDocument(target.documentPath);
-
-		if (originalContent) {
-			capturedDiagnostics = captureDiagnosticsForDocument(targetDocumentUri); // @TODO: find a better solution
-
-			const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length));
-			let editor = await vscode.window.showTextDocument(doc);
-
-			await editor.edit(editBuilder => {
-				editBuilder.replace(fullRange, originalContent!);
-			});
-			editor.selection = new vscode.Selection(target.selectionStartLine, target.selectionStartCharacter, target.selectionEndLine, target.selectionEndCharacter);
-		}
-	}
-
-	function captureDiagnosticsForDocument(targetDocumentUri: vscode.Uri) {
-		const diagnostics = vscode.languages.getDiagnostics(targetDocumentUri);
-		const errors = diagnostics.filter(diagnostic => diagnostic.severity === vscode.DiagnosticSeverity.Error);
-		if (errors.length > 0) {
-			let result = '';
-			for (const diagnostic of diagnostics) {
-				const line = `${diagnostic.message} line ${diagnostic.range.start.line}\n`;
-				result += line;
-			}
-			return result;
-		};
-		return '';
-	}
-
 	async function suggestRefactoringAction() {
-		// await vscode.commands.executeCommand('workbench.action.chat.clear'); @TODO: does not work
-
 		if (vscode.window.activeTextEditor) {
 			let selection = vscode.window.activeTextEditor.selection;
 			if (selection.isEmpty) {
