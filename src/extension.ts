@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 import * as scopePicker from './scopePicker';
+import { RefactoringPreviewContentProvider } from './previewContentProvider';
 
 const REFACTORING_PARTICIPANT_ID = 'refactoring-participant';
 
@@ -68,33 +69,6 @@ const NO_REFACTORING_RESULT: IRefactoringResult = {
 	refactoringTarget: ''
 };
 
-class RefactoringPreviewContentProvider implements vscode.TextDocumentContentProvider {
-	private originalContent: string = '';
-	private refactoredContent: string = '';
-	private fileExtension: string = '';
-	private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
-	public readonly onDidChange = this._onDidChange.event;
-
-	updateContent(original: string, refactored: string, fileExtension: string) {
-		this.originalContent = original;
-		this.refactoredContent = refactored;
-		this.fileExtension = fileExtension;
-	}
-
-	provideTextDocumentContent(uri: vscode.Uri): string {
-		if (uri.path === `original${this.fileExtension}`) {
-			return this.originalContent;
-		} else if (uri.path === `refactored${this.fileExtension}`) {
-			return this.refactoredContent;
-		}
-		return `Failed to provide content for the given uri ${uri}`;
-	}
-
-	public update(uri: vscode.Uri) {
-		this._onDidChange.fire(uri);
-	}
-}
-
 export function activate(context: vscode.ExtensionContext) {
 
 	let previewContentProvider = new RefactoringPreviewContentProvider();
@@ -130,8 +104,6 @@ export function activate(context: vscode.ExtensionContext) {
 			stream.markdown(`There is no active editor, open an editor and try again.`);
 			return NO_REFACTORING_RESULT;
 		}
-
-		//dumpHistory(context);
 
 		const selection = vscode.window.activeTextEditor.selection;
 		if (selection.isEmpty) {
@@ -171,6 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		
 		stream.progress('Suggesting a refactoring...');
+
 		const chatRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, messages, {}, token);
 		let suggestedRefactoring = '';
 
@@ -251,7 +224,7 @@ export function activate(context: vscode.ExtensionContext) {
 				`Please suggest another and differerent refactoring than the previous one for the following code.\n` +
 				`If you have no more suggestions, then just respond with "no more refactoring suggestions".\n` +
 				`This the request from the user:\n` +
-				`${request.prompt}\n` +
+				`${request.prompt}\n\n` +
 				`This is the code to be refactored:\n` +
 				`${code}`
 			),
@@ -374,7 +347,7 @@ export function activate(context: vscode.ExtensionContext) {
 		const messages = [
 			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
-				`1. Suggest refactorings that improve the error handling and make the code more robust and maintainable.\n` +
+				`Suggest refactorings that improve the error handling and make the code more robust and maintainable.\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
@@ -446,7 +419,6 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-
 		let decodedString = decodeURIComponent(annotationString!);
 		let annotation: IRefactoringTarget = JSON.parse(decodedString!);
 		let targetDocumentUri = vscode.Uri.file(annotation.documentPath);
@@ -459,7 +431,6 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(`The editor contents has changed. It is no longer possible to apply the suggested refactoring.`);
 			return;
 		}
-		let originalContent = editor.document.getText();
 
 		let targetSelection = new vscode.Selection(annotation.selectionStartLine, annotation.selectionStartCharacter, annotation.selectionEndLine, annotation.selectionEndCharacter);
 		let success = await editor.edit(editBuilder => {
