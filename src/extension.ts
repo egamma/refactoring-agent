@@ -3,8 +3,11 @@ import * as path from 'path';
 
 import * as scopePicker from './scopePicker';
 import { RefactoringPreviewContentProvider } from './previewContentProvider';
+import { encoding_for_model } from "tiktoken";
 
 const REFACTORING_PARTICIPANT_ID = 'refactoring-participant';
+
+const MAX_TOKENS = 4000;
 
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
@@ -143,6 +146,12 @@ export function activate(context: vscode.ExtensionContext) {
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
 		
 		stream.progress('Suggesting a refactoring...');
+
+		let tokens = countTokensInMessages(messages);
+		if (tokens > MAX_TOKENS) {
+			stream.markdown(`The request is too complex. Please make the selection smaller.`);
+			return NO_REFACTORING_RESULT;
+		}
 
 		const chatRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, messages, {}, token);
 		let suggestedRefactoring = '';
@@ -496,6 +505,21 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		await vscode.commands.executeCommand('workbench.action.chat.open', '@refactoring');
+	}
+
+	function countTokensInMessages(messages: vscode.LanguageModelChatMessage[]): number {
+		const gpt4Enc = encoding_for_model("gpt-4");
+		let tokenCount = 0;
+		try {
+			for (const message of messages) {
+				const encoded = gpt4Enc.encode(message.content);
+				tokenCount += encoded.length;
+			}
+			return tokenCount;
+		} catch (e) {
+		  gpt4Enc.free();
+		}
+		return tokenCount; 
 	}
 
 	// debugging aid
