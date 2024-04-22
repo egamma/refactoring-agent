@@ -168,7 +168,7 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 				return await suggestAnotherRefactoring(request, context, token, stream);
 			default:
-				return await suggestRefactorings(request, token, stream);
+				return await suggestRefactorings(request, context, token, stream);
 		}
 	};
 
@@ -231,12 +231,13 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	}
 
-	async function suggestRefactorings(request: vscode.ChatRequest, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
+	async function suggestRefactorings(request: vscode.ChatRequest, context: vscode.ChatContext, token: vscode.CancellationToken, stream: vscode.ChatResponseStream): Promise<IRefactoringResult> {
 		let editor = vscode.window.activeTextEditor!;
 
 		let code = getSelectedText(editor);
 
-		const messages = [
+		const messages = [];
+		messages.push(
 			new vscode.LanguageModelChatSystemMessage(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
@@ -248,13 +249,18 @@ export function activate(context: vscode.ExtensionContext) {
 				`- improve the error handling.\n` +
 				FORMAT_RESTRICTIONS
 			),
+		);
+
+		addHistoryToMessages(context, messages);
+
+		messages.push(
 			new vscode.LanguageModelChatUserMessage(
 				`This is the request from the user:\n` +
 				`${request.prompt}\n\n` +
 				`Suggest refactorings for the following code:\n` +
 				`${code}`
 			),
-		];
+		);
 		return makeRequest(messages, token, stream, code, editor);
 	}
 
