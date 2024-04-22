@@ -21,7 +21,7 @@ const CHAT_COMMAND_ERROR_HANDLING = 'errorHandling';
 const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 
 // language model
-const MAX_TOKENS = 4000;
+const MAX_TOKENS = 4000;  // TODO
 const DEFAULT_LANGUAGE_MODEL_ID = 'copilot-gpt-4';
 const modelMapping = new Map<string, string>();
 modelMapping.set('gpt4', 'copilot-gpt-4');
@@ -72,7 +72,7 @@ const BASIC_SYSTEM_MESSAGE =
 	`End of Example 6\n` +
 	`Example 7 use comment placeholder for existing code: \n` +
 	`// Rest of the code as before */\n` +
-	`End of Example 7\n` +	
+	`End of Example 7\n` +
 	`Always refactor in small steps.\n` +
 	`Be aware that you only have access to a subset of the project.\n`;
 
@@ -176,15 +176,20 @@ export function activate(context: vscode.ExtensionContext) {
 	refactoringChatParticipant.iconPath = new vscode.ThemeIcon('lightbulb-sparkle');
 
 	async function makeRequest(messages: vscode.LanguageModelChatMessage[], token: vscode.CancellationToken, stream: vscode.ChatResponseStream, code: string, editor: vscode.TextEditor) {
-		
+
 		stream.progress('Suggesting a refactoring...');
 
 		let tokens = countTokensInMessages(messages);
 		console.log('Tokens in request: ' + tokens);
 
 		if (tokens > MAX_TOKENS) {
-			stream.markdown(`The selected range is too long. Please make the selection smaller.`);
-			return NO_REFACTORING_RESULT;
+			messages = removeAssistantMessages(messages);
+			let tokens = countTokensInMessages(messages);
+			console.log('Tokens in request after removing history: ' + tokens);
+			if (tokens > MAX_TOKENS) {
+				stream.markdown(`The selected range is too long. Please make the selection smaller.`);
+				return NO_REFACTORING_RESULT;
+			}
 		}
 
 		let languageModel = getLanguageModelId();
@@ -212,6 +217,10 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		return createRefactoringResult(suggestedRefactoring, code, editor);
+	}
+
+	function removeAssistantMessages(messages: vscode.LanguageModelChatMessage[]): vscode.LanguageModelChatMessage[] {
+		return messages.filter((message) => !(message instanceof vscode.LanguageModelChatAssistantMessage));
 	}
 
 	function getLanguageModelId() {
@@ -568,9 +577,9 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			return tokenCount;
 		} catch (e) {
-		  gpt4Enc.free();
+			gpt4Enc.free();
 		}
-		return tokenCount; 
+		return tokenCount;
 	}
 
 	// debugging aid
