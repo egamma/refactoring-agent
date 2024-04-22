@@ -7,8 +7,6 @@ import { encoding_for_model } from "tiktoken";
 
 const REFACTORING_PARTICIPANT_ID = 'refactoring-participant';
 
-const MAX_TOKENS = 4000;
-
 // commands
 const PREVIEW_REFACTORING = 'refactoring.preview';
 const ANOTHER_REFACTORING = 'refactoring.another';
@@ -22,8 +20,12 @@ const CHAT_COMMAND_SMELLS = 'smells';
 const CHAT_COMMAND_ERROR_HANDLING = 'errorHandling';
 const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 
-// Language model
-const LANGUAGE_MODEL_ID = 'copilot-gpt-4';
+// language model
+const MAX_TOKENS = 4000;
+const DEFAULT_LANGUAGE_MODEL_ID = 'copilot-gpt-4';
+const modelMapping = new Map<string, string>();
+modelMapping.set('gpt4', 'copilot-gpt-4');
+modelMapping.set('gpt3-5', 'copilot-gpt-3.5-turbo');
 
 // prompts
 const BASIC_SYSTEM_MESSAGE =
@@ -32,17 +34,47 @@ const BASIC_SYSTEM_MESSAGE =
 	`You are well familiar with 'Code Smells' like duplicated code, long methods or functions, and bad naming.\n` +
 	`Make a refactoring suggestion that alters the code's its internal structure without changing the code's external behavior.\n` +
 	`Explain explain why the refactoring suggestion improves the code. \n` +
-	`Explain which refactorings you have applied. These are some popular refactorings:\n` +
+	`Explain which refactorings you have applied.\n` +
+	`These are popular refactorings:\n` +
 	`- Extract Method or Function\n` +
 	`- Extract Constant\n` +
 	`- Extract Variable\n` +
 	`- Rename a Variable or Function\n` +
 	`- Inline Method or Function` +
 	`- Introduce Explaining Variable\n` +
-	`Finally, answer with the complete refactored code.\n` +
+	`Finally, answer one code snippet showing the complete code after applying the refactorings.\n` +
+	`Do not elide any code in the final snippet that shows the refactored code.\n` +
+	`Do not use or use placeholders for code in comments in the final snippet that shows the refactored code. ` +
+	`Here are some examples of what you should **not** do in the final snippet:\n`;
+	`Example 1 elide code: \n` +
+	`function foo() {\n` +
+	`	// ...\n` +
+	`}\n` +
+	`End of Example 1\n` +
+	`Example 2 elide code: \n` +
+	`function foo() {\n` +
+	`	const messages = [...];` +
+	`}\n` +
+	`End of Example 2\n` +
+	`Example 3 use comment placeholder for existing code: \n` +
+	'function somefunction() {\n' +
+	`	// existing logic\n` +
+	`}\n` +
+	`End of Example 3\n` +
+	`Example 4 use comment placeholder for existing code: \n` +
+	`// other code unchanged...\n` +
+	`End of Example 4\n` +
+	`Example 5 use comment placeholder for existing code: \n` +
+	`// Cap the remaining codes...\n` +
+	`End of Example 5\n` +
+	`Example 6 use comment placeholder for existing code: \n` +
+	`/* Remaining code remains unchanged... */\n` +
+	`End of Example 6\n` +
+	`Example 7 use comment placeholder for existing code: \n` +
+	`// Rest of the code as before */\n` +
+	`End of Example 7\n` +	
 	`Always refactor in small steps.\n` +
-	`Always think step by step.\n` +
-	`Be aware that you only have access to a subset of the project\n`;
+	`Be aware that you only have access to a subset of the project.\n`;
 
 const FORMAT_RESTRICTIONS =
 	`Restrict the format used in your answers as follows:\n` +
@@ -148,12 +180,16 @@ export function activate(context: vscode.ExtensionContext) {
 		stream.progress('Suggesting a refactoring...');
 
 		let tokens = countTokensInMessages(messages);
+		console.log('Tokens in request: ' + tokens);
+
 		if (tokens > MAX_TOKENS) {
-			stream.markdown(`The request is too complex. Please make the selection smaller.`);
+			stream.markdown(`The selected range is too long. Please make the selection smaller.`);
 			return NO_REFACTORING_RESULT;
 		}
 
-		const chatRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, messages, {}, token);
+		let languageModel = getLanguageModelId();
+
+		const chatRequest = await vscode.lm.sendChatRequest(languageModel, messages, {}, token);
 		let suggestedRefactoring = '';
 
 		for await (const fragment of chatRequest.stream) {
@@ -176,6 +212,15 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		return createRefactoringResult(suggestedRefactoring, code, editor);
+	}
+
+	function getLanguageModelId() {
+		let languageModel = DEFAULT_LANGUAGE_MODEL_ID;
+		const languageModelSetting = vscode.workspace.getConfiguration('refactoring').get<string>('languageModel');
+		if (languageModelSetting) {
+			languageModel = modelMapping.get(languageModelSetting) ?? DEFAULT_LANGUAGE_MODEL_ID;
+		}
+		return languageModel;
 	}
 
 	function createRefactoringResult(suggestedRefactoring: string, code: string, editor: vscode.TextEditor): IRefactoringResult {

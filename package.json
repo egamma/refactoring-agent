@@ -93,6 +93,20 @@
                     "group": "copilotAction@20"
                 }
             ]
+        },
+        "configuration": {
+            "type": "object",
+            "properties": {
+                "refactoring.languageModel": {
+                    "type": "string",
+                    "enum": [
+                        "gpt4",
+                        "gpt3-5"
+                    ],
+                    "default": "gpt4",
+                    "description": "The language model to use for suggesting refactorings."
+                }
+            }
         }
     },
     "scripts": {
