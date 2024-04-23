@@ -21,7 +21,9 @@ const CHAT_COMMAND_ERROR_HANDLING = 'errorHandling';
 const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 
 // language model
-const MAX_TOKENS = 4000;  // TODO
+const MAX_TOKENS = 4096;  // TODO
+const MAX_SELECTION_TOKENS = Math.floor(MAX_TOKENS * 0.75);
+
 const DEFAULT_LANGUAGE_MODEL_ID = 'copilot-gpt-4';
 const modelMapping = new Map<string, string>();
 modelMapping.set('gpt4', 'copilot-gpt-4');
@@ -147,6 +149,14 @@ export function activate(context: vscode.ExtensionContext) {
 			};
 		}
 
+		const editor = vscode.window.activeTextEditor;
+		const selectedText = getSelectedText(editor);
+		const maxSelectedText = maxSelection(selectedText, MAX_SELECTION_TOKENS);
+		if (maxSelectedText !== selectedText.length) {
+			shrinkSelection(editor, maxSelectedText);
+			stream.markdown(`**Warning** reduced the size of the selection so that it fits in the model's context window.`);
+		}
+
 		const hasRefactoringRequest = context.history.some(entry => entry instanceof vscode.ChatResponseTurn);
 		switch (request.command) {
 			case CHAT_COMMAND_DUPLICATION:
@@ -230,6 +240,32 @@ export function activate(context: vscode.ExtensionContext) {
 			languageModel = modelMapping.get(languageModelSetting) ?? DEFAULT_LANGUAGE_MODEL_ID;
 		}
 		return languageModel;
+	}
+
+	function shrinkSelection(editor: vscode.TextEditor, maxSelectedText: number) {
+		const startOffset = editor.document.offsetAt(editor.selection.start);
+		const endOffset = startOffset + maxSelectedText;
+		const endPosition = editor.document.positionAt(endOffset);
+		const newSelection = new vscode.Selection(editor.selection.start, endPosition);
+		editor.selection = newSelection;
+	}
+
+	function maxSelection(selection: string, maxTokens: number): number {
+		// First, quickly check if the entire text is within the budget
+		if (countTokens(selection) <= maxTokens) {
+			return selection.length;
+		}
+
+		let low = 0, high = selection.length;
+		while (low < high) {
+			const mid = Math.floor((low + high + 1) / 2);
+			if (countTokens(selection.substring(0, mid)) <= maxTokens) {
+				low = mid;  
+			} else {
+				high = mid - 1; 
+			}
+		}
+		return low;
 	}
 
 	function createRefactoringResult(suggestedRefactoring: string, code: string, editor: vscode.TextEditor): IRefactoringResult {
@@ -576,6 +612,18 @@ export function activate(context: vscode.ExtensionContext) {
 				tokenCount += encoded.length;
 			}
 			return tokenCount;
+		} catch (e) {
+			gpt4Enc.free();
+		}
+		return tokenCount;
+	}
+
+	function countTokens(text: string): number {
+		const gpt4Enc = encoding_for_model("gpt-4"); // TODO adapt to used model
+		let tokenCount = 0;
+		try {
+			const encoded = gpt4Enc.encode(text);
+			tokenCount = encoded.length;
 		} catch (e) {
 			gpt4Enc.free();
 		}
