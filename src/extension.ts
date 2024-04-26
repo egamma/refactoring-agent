@@ -246,7 +246,9 @@ export function activate(context: vscode.ExtensionContext) {
 		const startOffset = editor.document.offsetAt(editor.selection.start);
 		const endOffset = startOffset + maxSelectedText;
 		const endPosition = editor.document.positionAt(endOffset);
-		const newSelection = new vscode.Selection(editor.selection.start, endPosition);
+		const lineEndOffset = editor.document.offsetAt(endPosition.with({ character: editor.document.lineAt(endPosition.line).text.length }));
+		const lineEndPosition = editor.document.positionAt(lineEndOffset);
+		const newSelection = new vscode.Selection(editor.selection.start, lineEndPosition);
 		editor.selection = newSelection;
 	}
 
@@ -619,15 +621,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	function countTokens(text: string): number {
-		const gpt4Enc = encoding_for_model("gpt-4"); // TODO adapt to used model
-		let tokenCount = 0;
-		try {
-			const encoded = gpt4Enc.encode(text);
-			tokenCount = encoded.length;
-		} catch (e) {
-			gpt4Enc.free();
-		}
-		return tokenCount;
+		return countTokensInMessages([{ content: text }]);
 	}
 
 	// debugging aid
