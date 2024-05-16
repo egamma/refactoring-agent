@@ -24,7 +24,7 @@ const CHAT_COMMAND_SUGGEST_ANOTHER = 'suggestAnotherRefactoring';
 const MAX_TOKENS = 4096;  // TODO
 const MAX_SELECTION_TOKENS = Math.floor(MAX_TOKENS * 0.75);
 
-const DEFAULT_LANGUAGE_MODEL_ID = 'copilot-gpt-4';
+const DEFAULT_LANGUAGE_MODEL_FAMILY = 'copilot-gpt-4';
 const modelMapping = new Map<string, string>();
 modelMapping.set('gpt4', 'copilot-gpt-4');
 modelMapping.set('gpt3-5', 'copilot-gpt-3.5-turbo');
@@ -202,12 +202,13 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		}
 
-		let languageModel = getLanguageModelId();
+		const selector = getLanguageModelSelector()
+		const [languageModel] = await vscode.lm.selectChatModels(selector);
 
-		const chatRequest = await vscode.lm.sendChatRequest(languageModel, messages, {}, token);
+		const chatRequest = await languageModel.sendRequest(messages, {}, token);
 		let suggestedRefactoring = '';
 
-		for await (const fragment of chatRequest.stream) {
+		for await (const fragment of chatRequest.text) {
 			suggestedRefactoring += fragment;
 			stream.markdown(fragment);
 		}
@@ -233,13 +234,14 @@ export function activate(context: vscode.ExtensionContext) {
 		return messages.filter((message) => !(message instanceof vscode.LanguageModelChatAssistantMessage));
 	}
 
-	function getLanguageModelId() {
-		let languageModel = DEFAULT_LANGUAGE_MODEL_ID;
+	function getLanguageModelSelector() {
+		let languageModel = DEFAULT_LANGUAGE_MODEL_FAMILY;
 		const languageModelSetting = vscode.workspace.getConfiguration('refactoring').get<string>('languageModel');
 		if (languageModelSetting) {
-			languageModel = modelMapping.get(languageModelSetting) ?? DEFAULT_LANGUAGE_MODEL_ID;
+			languageModel = modelMapping.get(languageModelSetting) ?? DEFAULT_LANGUAGE_MODEL_FAMILY;
 		}
-		return languageModel;
+
+		return { vendor: 'copilot', family: languageModel };
 	}
 
 	function shrinkSelection(editor: vscode.TextEditor, maxSelectedText: number) {
@@ -285,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const messages = [];
 		messages.push(
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`\n` +
@@ -301,7 +303,7 @@ export function activate(context: vscode.ExtensionContext) {
 		addHistoryToMessages(context, messages);
 
 		messages.push(
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`This is the request from the user:\n` +
 				`${request.prompt}\n\n` +
 				`Suggest refactorings for the following code:\n` +
@@ -317,7 +319,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const messages = [];
 		messages.push(
-			new vscode.LanguageModelChatUserMessage(BASIC_SYSTEM_MESSAGE +
+			vscode.LanguageModelChatMessage.User(BASIC_SYSTEM_MESSAGE +
 				`The user was not satisfied with the previous refactoring suggestion. Please provide another refactoring suggestion that is different from the previous one.\n` +
 				`When you have no more suggestions that differ from the previous suggestion, then just respond with "no more refactoring suggestions".\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
@@ -327,7 +329,7 @@ export function activate(context: vscode.ExtensionContext) {
 		addHistoryToMessages(context, messages);
 
 		messages.push(
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`Please suggest another and differerent refactoring than the previous one for the following code.\n` +
 				`If you have no more suggestions, then just respond with "no more refactoring suggestions".\n` +
 				`This the request from the user:\n` +
@@ -345,13 +347,13 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`Suggest refactorings that eliminate code duplication.\n` +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code:\n` +
 				`${code}`
@@ -366,13 +368,13 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that eliminate code smells.\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that reduce code smells:\n` +
 				`${code}`
@@ -387,13 +389,13 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that make the code more performant.\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that improve the performance:\n` +
 				`${code}`
@@ -408,14 +410,14 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`The language used in the selected code is ${getLanguage(editor)}\n` +
 				`Suggest refactorings that make the code follow the language's idioms and naming patterns. \n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that make the code follow the language's idioms and naming patterns:\n` +
 				`${code}`
@@ -430,14 +432,14 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`Suggest refactorings that make the code easier to understand and maintain.\n` +
 				`Suggest rename refactorings of variable names when it improves the readability.\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that make the code easier to understand:\n` +
 				`${code}`
@@ -452,13 +454,13 @@ export function activate(context: vscode.ExtensionContext) {
 		let code = getSelectedText(editor);
 
 		const messages = [
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				BASIC_SYSTEM_MESSAGE +
 				`Suggest refactorings that improve the error handling and make the code more robust and maintainable.\n` +
 				`The language used in the code is ${getLanguage(editor)}\n` +
 				FORMAT_RESTRICTIONS
 			),
-			new vscode.LanguageModelChatUserMessage(
+			vscode.LanguageModelChatMessage.User(
 				`${request.prompt}\n` +
 				`Suggest refactorings for the following code that improve the error handling:\n` +
 				`${code}`

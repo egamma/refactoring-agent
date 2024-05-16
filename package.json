@@ -5,7 +5,7 @@
     "description": "An participant for suggesting refactorings for the current selection.",
     "version": "0.1.0",
     "engines": {
-        "vscode": "^1.86.0"
+        "vscode": "^1.90.0"
     },
     "extensionDependencies": [
         "github.copilot-chat"
@@ -15,11 +15,6 @@
     ],
     "activationEvents": [
         "onStartupFinished"
-    ],
-    "enabledApiProposals": [
-        "chatParticipant",
-        "languageModels",
-        "interactive"
     ],
     "main": "./out/extension.js",
     "contributes": {
