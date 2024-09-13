@@ -231,17 +231,11 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	function removeAssistantMessages(messages: vscode.LanguageModelChatMessage[]): vscode.LanguageModelChatMessage[] {
-		return messages.filter((message) => !(message instanceof vscode.LanguageModelChatAssistantMessage));
+		return messages.filter((message) => !(message.role === vscode.LanguageModelChatMessageRole.Assistant));
 	}
 
 	function getLanguageModelSelector() {
-		let languageModel = DEFAULT_LANGUAGE_MODEL_FAMILY;
-		const languageModelSetting = vscode.workspace.getConfiguration('refactoring').get<string>('languageModel');
-		if (languageModelSetting) {
-			languageModel = modelMapping.get(languageModelSetting) ?? DEFAULT_LANGUAGE_MODEL_FAMILY;
-		}
-
-		return { vendor: 'copilot', family: languageModel };
+		return { vendor: 'copilot', family: 'gpt-4o' };
 	}
 
 	function shrinkSelection(editor: vscode.TextEditor, maxSelectedText: number) {
@@ -476,7 +470,7 @@ export function activate(context: vscode.ExtensionContext) {
 			if (entry instanceof vscode.ChatResponseTurn) {
 				for (const responseEntry of entry.response) {
 					if (responseEntry instanceof vscode.ChatResponseMarkdownPart) {
-						messages.push(new vscode.LanguageModelChatAssistantMessage(responseEntry.value.value));
+						messages.push(new vscode.LanguageModelChatMessage(vscode.LanguageModelChatMessageRole.Assistant, responseEntry.value.value));
 					}
 				}
 			}
@@ -623,7 +617,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	function countTokens(text: string): number {
-		return countTokensInMessages([{ content: text }]);
+		return countTokensInMessages([vscode.LanguageModelChatMessage.User(text)]);
 	}
 
 	// debugging aid
