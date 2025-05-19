@@ -4,6 +4,8 @@ export class RefactoringPreviewContentProvider implements vscode.TextDocumentCon
 	private originalContent: string = '';
 	private refactoredContent: string = '';
 	private fileExtension: string = '';
+	private newProperty: string = '';
+
 	private _onDidChange = new vscode.EventEmitter<vscode.Uri>();
 	public readonly onDidChange = this._onDidChange.event;
 
